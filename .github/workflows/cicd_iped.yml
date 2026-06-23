@@ -20,13 +20,13 @@ jobs:
     # CACHE E DEPENDÊNCIAS (Pra não compilar CUDA do zero)
     # ==========================================
     - name: Docker pull dependecies 
-      run: docker pull joasource/iped:dependencies || echo "Sem cache anterior"
+      run: docker pull joaca/iped:dependencies || echo "Sem cache anterior"
 
     - name: Docker build dependecies 
-      run: docker build --cache-from joasource/iped:dependencies . -f Dockerfile.dependencies -t joasource/iped:dependencies
+      run: docker build --cache-from joaca/iped:dependencies . -f Dockerfile.dependencies -t joaca/iped:dependencies
 
     - name: Docker push dependecies 
-      run: docker push joasource/iped:dependencies 
+      run: docker push joaca/iped:dependencies 
 
     # ==========================================
     # COMPILA O SNAPSHOT (Usa o Token em Segredo)
@@ -36,7 +36,7 @@ jobs:
       with:
         context: .
         file: Dockerfile.processor
-        tags: joasource/iped:processor-snapshot
+        tags: joaca/iped:processor-snapshot
         push: true 
         secrets: |
           "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
@@ -48,5 +48,5 @@ jobs:
       uses: docker/build-push-action@v5      
       with:
         context: .        
-        tags: joasource/iped:snapshot
+        tags: joaca/iped:snapshot
         push: true
