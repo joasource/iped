@@ -1,62 +1,52 @@
-name: CI/CD
+name: Compilar IPED Snapshot
 
-on: [push]
-
+on: 
+  workflow_dispatch: # É isso aqui que cria o botão de apertar e rodar no GitHub!
 
 jobs:
   build:
-    
     runs-on: ubuntu-latest
-
-#    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'
-    if: startsWith(github.ref, 'refs/tags/iped_') 
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
-    - name: Set Environment
-      run: echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
-
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1      
+      uses: docker/setup-buildx-action@v3      
       
     - name: Docker login      
       run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
 
-#
-# using classic build on dependencies, because is the only way to cache now.
-#
-    - name: Docker pull dependecies-RELEASE 
-      run: docker pull ipeddocker/iped:dependencies || echo could not pull
+    # ==========================================
+    # CACHE E DEPENDÊNCIAS (Pra não compilar CUDA do zero)
+    # ==========================================
+    - name: Docker pull dependecies 
+      run: docker pull joasource/iped:dependencies || echo "Sem cache anterior"
 
-    - name: Docker build dependecies-RELEASE 
-      run: docker build --cache-from ipeddocker/iped:dependencies . -f Dockerfile.dependencies -t ipeddocker/iped:dependencies
+    - name: Docker build dependecies 
+      run: docker build --cache-from joasource/iped:dependencies . -f Dockerfile.dependencies -t joasource/iped:dependencies
 
-    - name: Docker push dependecies-RELEASE 
-      run: |
-        docker tag ipeddocker/iped:dependencies ipeddocker/iped:dependencies_${{ env.VERSION }}
-        docker push ipeddocker/iped:dependencies 
-        docker push ipeddocker/iped:dependencies_${{ env.VERSION }}
+    - name: Docker push dependecies 
+      run: docker push joasource/iped:dependencies 
 
-
-    - name: Docker build processor-RELEASE 
-      uses: docker/build-push-action@v4      
+    # ==========================================
+    # COMPILA O SNAPSHOT (Usa o Token em Segredo)
+    # ==========================================
+    - name: Docker build processor-SNAPSHOT 
+      uses: docker/build-push-action@v5      
       with:
         context: .
         file: Dockerfile.processor
-        tags: | 
-          ipeddocker/iped:processor
-          ipeddocker/iped:processor_${{ env.VERSION }}
+        tags: joasource/iped:processor-snapshot
         push: true 
         secrets: |
           "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
 
-
-    - name: Docker build iped-RELEASE 
-      uses: docker/build-push-action@v4      
+    # ==========================================
+    # MONTA A IMAGEM FINAL (Com Interface)
+    # ==========================================
+    - name: Docker build iped-GUI-SNAPSHOT
+      uses: docker/build-push-action@v5      
       with:
         context: .        
-        tags: | 
-          ipeddocker/iped:latest
-          ipeddocker/iped:${{ env.VERSION }}
-        push: true 
+        tags: joasource/iped:snapshot
+        push: true

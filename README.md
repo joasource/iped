@@ -1,159 +1,113 @@
-# IPED Container
+# joasource/iped
 
-![CI](https://github.com/iped-docker/iped/workflows/CI/CD/badge.svg)
+Este repositório é um fork especializado do `iped-docker/iped`, adaptado para o meu fluxo de trabalho. O foco aqui é **performance bruta e recursos avançados**, utilizando **Whisper** para transcrição de áudio, **reconhecimento facial** de alta performance e suporte nativo à **aceleração via GPU NVIDIA (CUDA)**.
 
+> **Nota:** Certifique-se de ter o `nvidia-container-toolkit` instalado no seu host para que a GPU seja mapeada corretamente para dentro dos containers.
 
-Install Docker version 19.03.5 and above if you want to use GPU's.
+---
 
-### Before you begin, fast tips for rapid deployment
-##### FAST TIP Num.1: If you just want to use the latest docker (without building or customizing it), go directly to "Adjusting the environment for execution" section and follow the instructions until the end of the page.
-##### FAST TIP Num.2: If you just want to process the evidences with latest docker (again, without building or customizing it), in text mode and without analysis interface on linux (graphical analysis of the resulting case can be made afterwards in another computer for example, running Windows or Linux), use the following command:
+## 💡 Dicas Rápidas (Para quem não quer perder tempo)
 
-```
-sudo docker run --rm -it -v /mnt/evidences:/evidences \
-                 -v /mnt/ipedtmp:/mnt/ipedtmp \
-                 -v /mnt/plugins:/mnt/plugins \
-                 -v /mnt/hashesdb:/mnt/hashesdb \
-                   ipeddocker/iped:processor java -jar iped.jar --nogui \
-                 -d /evidences/test/test.dd \
-                 -o /evidences/test/iped-output 
-```
+##### ⚙️ Build da Imagem
 
-It can be used without the optional features also. We recommend that at least the evidences and temporary folder be used as volumes:
-```
-sudo docker run --rm -it -v /mnt/evidences:/evidences \ 
-                 -v /mnt/ipedtmp:/mnt/ipedtmp \
-                 ipeddocker/iped:processor java -jar iped.jar --nogui \
-                 -d /evidences/test/test.dd \
-                 -o /evidences/test/iped-output
-```
-Of course, in both cases you'll have to change the volumes to reflect your environment.
+Comando para instalar tudo:
 
-##### FAST TIP Num.3: Changing IPEDDOCKER Locale and other settings
-It's possible to change IPED settings using environment variables with the iped_ prefix (a list of suported variables is at the end of this page). 
-Here we can see an example of changing the IPED locale for German, as enabling NER, Audio Transcription and OCR for the locations.
+```bash
+git clone https://github.com/joasource/iped
+cd iped
+
+# Compilando as versões
+docker build . -f Dockerfile.dependencies -t joasource/iped:dependencies
+docker build . -f Dockerfile.processor -t joasource/iped:processor
+docker build . -t joasource/iped
 
 ```
-docker run --rm -it -e TZ="Europe/Berlin" -e iped_locale="de-DE" \
-                 -e iped_enableOCR="true" -e iped_OCRLanguage="deu+frk" -e iped_phone_region="DE" \
-                 -e iped_enableNamedEntityRecogniton="true" \
-                 -e iped_enableAudioTranscription="true" \
-                 -v /mnt/evidences:/evidences \
-                 -v /mnt/ipedtmp:/mnt/ipedtmp \
-                 -v /mnt/plugins:/mnt/plugins \
-                 -v /mnt/Downloaded_Hashesdb:/mnt/hashesdb \
-                 -v /mnt/Downloaded_Vosk_Model:/root/IPED/iped/models/vosk/de-DE
-                 -v /conf/YourNERConfig.txt:/root/IPED/iped/conf/NamedEntityRecognitionConfig.txt
-                   ipeddocker/iped:processor java -jar iped.jar --nogui \
-                 -d /evidences/test/test.dd \
-                 -o /evidences/test/iped-output
 
-```
-Extra plugins (other than the default IPED plugins) must be inserted as a volume on /mnt/plugins, so that entrypoint.sh will add them to the correct folder during the container run.  
-Models and hash bases are NOT inserted on the docker (that only carry applications for the container size sake), and they must be inserted via volumes. So you have to download your desired model and insert it as volume.
-It's suggested to insert NER config through volume also. 
+##### Configurando o ambiente (`dkr.source`)
 
+Para rodar o IPED com interface gráfica (X11) e com as permissões de GPU corretas, utilize o script `dkr.source`. Ele cria a função `dkr` que facilita o deploy:
 
-##### FAST TIP Num.4: Help can be achieved with the command:
-```
-sudo docker run --rm -it ipeddocker/iped:processor java -jar iped.jar --help
-```
-##### FAST TIP Num.5: About the container "flavors"
-
-       - ipeddocker/iped - Full processing and analysis capable environment (larger container)
-
-       - ipeddocker/iped:processor - Environment optimized for evidence processing (smaller container)
-
-
-
-#### So, lets begin...
-
-
-## Docker Image Build 
-1. Clone the repository
- 
-    ```
-    git clone https://github.com/iped-docker/iped
-    cd iped
-    ```
-    
-2. (Optional) Download optional IPED dependencies:
-    The default config files are configured to use these directories inside the docker:
-    
-    - Plugins: /mnt/plugins    
-    - HASHDB: /mnt/hashdb 
-    
-    If these directories are empty, the entrypoint.sh will disable these features.
-
-    Note: You don't need to change it, it is completely optional, but if you want to change default values for the internal container directories, you can adjust LocalConfig.txt and IPEDConfig.txt to your environment before building it. You just have to take care when configuring the docker volumes. 
-
-3.  Build the IPED docker images: 
-    ```
-    docker build . -f Dockerfile.processor -t ipeddocker/iped:processor
-    docker build . -t ipeddocker/iped
-    ```
- 
-## Adjusting the environment for execution
-
-To use the IPED java program on a graphical interface, it's imperative to configure the docker environment to use a X server. We created a script (the script dkr.source) to easily deploy/execute IPED on X graphical local enviroments.
-
-The script in dkr.source creates a bash function "dkr" that extends the docker command, setting some usefull docker options.
-
-What is inside dkr.source:
-
-    ```
-    #!/bin/bash
-    dkr () 
-    {
-      xhost +
-      docker run --rm -it -v "`pwd`":"`pwd`":Z \
-              -e DISPLAY -e GDK_BACKEND \
-              -e GDK_SCALE \
-              -e SAL_USE_VCLPLUGIN=gen \
-              -e GDK_DPI_SCALE \
-              -e QT_DEVICE_PIXEL_RATIO \
-              -e LANG=C.UTF-8 \
-              -e LC_ALL=C.UTF-8 \
-              -e NO_AT_BRIDGE=1 \
-              --device /dev/dri \
-              --device /dev/snd \
-              -v /etc/localtime:/etc/localtime:ro \
-              -v /tmp/.X11-unix/:/tmp/.X11-unix/ "$@"
-    }
-    export -f dkr
-    ```
-
-To use it:
-
-```
+```bash
+# Carregue o script no seu terminal
 source dkr.source
-dkr ipeddocker/iped
-```
-## Executing the containers
 
-It's strongly recommended to use the source directories of /mnt/ipedtmp and /mnt/hashesdb volumes on SSD disks!!!
-
-### IPED docker (Processing)
+# Agora basta usar o comando 'dkr' para executar os containers
+dkr joasource/iped
 
 ```
-    sudo dkr -v /mnt/evidences:/evidences \
-                   -v /mnt/ipedtmp:/mnt/ipedtmp \
-                   -v /mnt/plugins:/mnt/plugins \            
-                   -v /mnt/hashesdb:/mnt/hashesdb \
-                   ipeddocker/iped java -jar iped.jar \
-                   -d /evidences/test/test.dd \
-                   -o /evidences/test/iped-output
-```
-### IPED docker (Analysing)
-```
-    sudo dkr -v /mnt/evidences:/evidences \
-           -v /mnt/ipedtmp:/mnt/ipedtmp \
-           ipeddocker/iped java -jar \ 
-           /evidences/test/iped-output/iped/lib/iped-search-app.jar
+
+**Conteúdo do `dkr.source`:**
+
+```bash
+#!/bin/bash
+dkr () 
+{
+  xhost +
+  docker run --rm -it --gpus all -v "`pwd`":"`pwd`":Z \
+             -e DISPLAY -e GDK_BACKEND -e GDK_SCALE -e SAL_USE_VCLPLUGIN=gen \
+             -e GDK_DPI_SCALE -e QT_DEVICE_PIXEL_RATIO -e LANG=C.UTF-8 \
+             -e LC_ALL=C.UTF-8 -e NO_AT_BRIDGE=1 \
+             --device /dev/dri --device /dev/snd \
+             -v /etc/localtime:/etc/localtime:ro \
+             -v /tmp/.X11-unix/:/tmp/.X11-unix/ "$@"
+}
+export -f dkr
+
 ```
 
-## NEW FEATURE
-### Runtime configuration adjustment can be done setting an environment variable with iped_ prefix following the variable name. The variables bellow are currently supported. 
+---
+
+## 🚀 Executando os Containers
+
+**Dica de ouro:** Use volumes em discos **SSD** para `/mnt/ipedtmp` e `/mnt/hashesdb`. Se o I/O for lento, não adianta ter uma GPU de ponta.
+
+### Comando para Processamento (Batch/Headless)
+
+Para execução do indexador com interface gráfica:
+
+```bash
+sudo dkr -v /mnt/evidences:/evidences \
+   -v ~/ipedtmp:/mnt/ipedtmp \
+   -v ~/ipedlog:/opt/IPED/iped/log \
+   -v ~/output:/output \
+   -v ~/.cache/huggingface/hub:/root/.cache/huggingface/hub/ \
+    joasource/iped java -jar /opt/IPED/iped/iped.jar \
+   -d /evidences/evidence.ufdr \
+   -o /output/IPED_OUTPUT
+
+```
+
+### Comando para Análise (Interface Gráfica)
+
+Após o processamento, abra o resultado na interface do IPED:
+
+```bash
+sudo dkr -v /mnt/evidences:/evidences \
+         -v /mnt/ipedtmp:/mnt/ipedtmp \
+         joasource/iped java -jar \
+         /evidences/iped-output/iped/lib/iped-search-app.jar
+
+```
+
+---
+
+## 🛠️ Por que este Fork?
+
+O `joasource/iped` foi refinado para:
+
+* **Integração com Whisper:** Transcrição de áudio via GPU.
+* **Reconhecimento Facial:** Ajustado para rodar nativamente com CUDA.
+* **Performance:** Remoção de imagens antigas do *transcriptor* que causavam conflitos e ocupavam espaço desnecessário.
+* **Otimização:** Containers slim preparados para o seu ambiente.
+
+---
+
+## ⚙️ Configurações Avançadas (Runtime)
+
+Conforme trazido pelo ipeddocker/iped, é possível que você ajuste o comportamento do motor forense em tempo de execução utilizando variáveis de ambiente (-e). Basta definir a variável desejada no comando `docker run` ou `dkr` usando o prefixo `iped_`.
+
+As variáveis suportadas são:
+
 ```
 iped_locale=
 iped_indexTemp=
@@ -334,7 +288,70 @@ iped_computeFromThumbnail=
 iped_minFileSize=
 iped_skipHashDBFiles=
 iped_phone_region=
-
-
 ```
 
+# 🚀 Configuração do Docker Engine + NVIDIA Container Toolkit no WSL2
+
+**Dica de ouro:** Se o instalador `.exe` do Docker Desktop estiver falhando ou apresentando problemas de inicialização no Windows, a solução definitiva é instalar o motor do Docker diretamente no **WSL2**. Isso garante um ambiente leve, sem interface gráfica desnecessária e com performance máxima para processamento de dados.
+
+### 1. Preparar o Ambiente (PowerShell)
+Antes de começar, garanta que o subsistema Linux está ativo e atualizado no Windows Host:
+
+```powershell
+wsl --install -d Ubuntu
+```
+*(Se já tiver a distribuição Ubuntu ativa, basta abrir o terminal dela pelo menu Iniciar).*
+
+### 2. Instalar o Docker Engine (Terminal Ubuntu)
+Execute a sequência de comandos abaixo dentro do terminal do Linux para configurar o repositório oficial e instalar o motor por linha de comando:
+
+```bash
+# Atualizar os índices de pacotes do sistema
+sudo apt-get update && sudo apt-get upgrade -y
+
+# Instalar as dependências necessárias
+sudo apt-get install ca-certificates curl gnupg lsb-release -y
+
+# Importar a chave GPG oficial do Docker
+curl -fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.docker.com/linux/ubuntu/gpg) | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+# Adicionar o repositório estável ao APT
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu) $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar o motor e o client do Docker
+sudo apt-get update && sudo apt-get install docker-ce docker-ce-cli containerd.io -y
+```
+
+### 3. Instalar o NVIDIA Container Toolkit (Terminal Ubuntu)
+Com o Docker pronto, configure o suporte a GPU para permitir aceleração de hardware dentro dos seus containers:
+
+```bash
+# Adicionar o repositório oficial da NVIDIA
+curl -fsSL [https://nvidia.github.io/libnvidia-container/gpgkey](https://nvidia.github.io/libnvidia-container/gpgkey) | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && curl -s -L [https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list](https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list) | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Instalar o Toolkit da NVIDIA
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+
+# Configurar o daemon do Docker para injetar o runtime da NVIDIA
+sudo nvidia-ctk runtime configure --runtime=docker
+
+# Reiniciar o daemon do Docker para validar as alterações
+sudo service docker restart
+```
+
+### 4. Validação da GPU no Container
+Após o reinício do serviço, faça o teste para garantir que os containers estão enxergando a placa de vídeo do host:
+
+```bash
+docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
+```
+
+---
+
+## 🛠️ Solução de Problemas
+
+* **Permission Denied no socket:** Se receber erros de permissão ao rodar comandos do Docker sem `sudo`, adicione seu usuário ao grupo do Docker:
+```bash
+  sudo usermod -aG docker $USER && newgrp docker
+  ```
+* **GPU não encontrada no container:** O WSL2 espelha o hardware do Windows. Certifique-se de que o driver da NVIDIA no seu **Windows Host** está atualizado na versão mais recente.

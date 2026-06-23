@@ -2,7 +2,7 @@
 dkr () 
 {
   xhost +
-  docker run --rm -it -v "`pwd`":"`pwd`":Z \
+  docker run --gpus all --rm -it -v "`pwd`":"`pwd`":Z \
           -e DISPLAY -e GDK_BACKEND \
           -e GDK_SCALE \
           -e GDK_DPI_SCALE \

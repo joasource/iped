@@ -1,4 +1,4 @@
-FROM ipeddocker/iped:processor
+FROM joaca/iped:processor
 
 # Para abrir o iped-search no docker
 # 
@@ -143,4 +143,3 @@ RUN apt-get update && apt-get install -y \
 # ENV SAL_USE_VCLPLUGIN="gtk"
 # For gllibs conflict resolution
 # ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64"
-

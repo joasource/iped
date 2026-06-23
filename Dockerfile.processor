@@ -1,11 +1,10 @@
-FROM ipeddocker/iped:dependencies
+FROM joaca/iped:dependencies
 
-ARG SNAPSHOT=true IPED_RELEASE_VERSION=4.3.0 SNAPSHOT_WORKFLOW_ID=22681820666 PKGTMPDIR=/tmp/pkgs
-
+ARG SNAPSHOT=true IPED_RELEASE_VERSION=4.3.0 SNAPSHOT_WORKFLOW_ID=28028043063 PKGTMPDIR=/tmp/pkgs
 
 RUN --mount=type=secret,id=ACTION_GH_TOKEN export ACTION_GH_TOKEN=$(cat /run/secrets/ACTION_GH_TOKEN) \
     && mkdir -p /opt/IPED/ && cd /opt/IPED/ \
-    && apt-get update && apt-get install -y jq curl \
+    && apt-get update && apt-get install -y jq curl unzip \
     && if [ "${SNAPSHOT}" = "true" ]; \
         then \
             echo "#####################################" && \
@@ -16,7 +15,7 @@ RUN --mount=type=secret,id=ACTION_GH_TOKEN export ACTION_GH_TOKEN=$(cat /run/sec
                             -H "Authorization: Bearer ${ACTION_GH_TOKEN}" \
                             -H "X-GitHub-Api-Version: 2022-11-28" \
                             https://api.github.com/repos/sepinf-inc/IPED/actions/artifacts  | \
-                        jq --arg workflow_id $SNAPSHOT_WORKFLOW_ID -c '.artifacts[] | select(.workflow_run.id|tostring == $workflow_id) | .archive_download_url' | \
+                          jq --arg workflow_id $SNAPSHOT_WORKFLOW_ID -c '.artifacts[] | select(.workflow_run.id|tostring == $workflow_id) | .archive_download_url' | \
                         tr -d '\"') && \
             echo "Downloading ${snapshotURL}..." && \
             curl -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${ACTION_GH_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" --output ${PKGTMPDIR}/iped.zip ${snapshotURL} && \
@@ -38,11 +37,25 @@ RUN --mount=type=secret,id=ACTION_GH_TOKEN export ACTION_GH_TOKEN=$(cat /run/sec
     && sed -i -e "s/locale =.*/locale = pt-BR/" /opt/IPED/iped/LocalConfig.txt \
     && sed -i -e "s/indexTemp =.*/indexTemp = \/mnt\/ipedtmp/" /opt/IPED/iped/LocalConfig.txt \
     && sed -i -e "s/indexTempOnSSD =.*/indexTempOnSSD = true/" /opt/IPED/iped/LocalConfig.txt \
-    && sed -i -e "s/outputOnSSD =.*/outputOnSSD = false/" /opt/IPED/iped/LocalConfig.txt \
-    && sed -i -e "s/numThreads =.*/numThreads = 8/" /opt/IPED/iped/LocalConfig.txt \
+    && sed -i -e "s/outputOnSSD =.*/outputOnSSD = true/" /opt/IPED/iped/LocalConfig.txt \
+    && sed -i -e "s/numThreads =.*/numThreads = default/" /opt/IPED/iped/LocalConfig.txt \
     && sed -i -e "s/#hashesDB =.*/hashesDB = \/mnt\/hashesdb\/iped-hashes.db/" /opt/IPED/iped/LocalConfig.txt \
     && sed -i -e "s/#tskJarPath =.*/tskJarPath = \/usr\/share\/java\/sleuthkit-4.12.0.jar/" /opt/IPED/iped/LocalConfig.txt \    
     && sed -i -e "s/mplayerPath =.*/mplayerPath = \/usr\/bin\/mplayer/" /opt/IPED/iped/LocalConfig.txt \
+    && echo "#####################################" \
+    && echo "Ajustando transcrição de áudio, imagens similares, reconhecimento de face e OCR " \
+    && echo "#####################################" \
+    && sed -i -e "s/enableLanguageDetect = true/enableLanguageDetect = false/" /opt/IPED/iped/IPEDConfig.txt \
+    && sed -i -e "s/enableImageSimilarity = false/enableImageSimilarity = true/" /opt/IPED/iped/IPEDConfig.txt \
+    && sed -i -e "s/enableAgeEstimation = false/enableAgeEstimation = true/" /opt/IPED/iped/IPEDConfig.txt \
+    && sed -i -e "s/enableOCR = false/enableOCR = true/" /opt/IPED/iped/IPEDConfig.txt \
+    && sed -i -e "s/enableFaceRecognition = false/enableFaceRecognition = true/" /opt/IPED/iped/IPEDConfig.txt \
+    && sed -i -e "s/enableAudioTranscription = false/enableAudioTranscription = true/" /opt/IPED/iped/IPEDConfig.txt \
+    && sed -i -e "s/implementationClass = iped.engine.task.transcript.VoskTranscriptTask/#implementationClass = iped.engine.task.transcript.VoskTranscriptTask/" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
+    && sed -i -e "s|whisperModel =.*|whisperModel = dropbox-dash/faster-whisper-large-v3-turbo|" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
+    && sed -i -e "s/device =.*/device = gpu/" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
+    && sed -i -e "s/precision =.*/precision = float16/" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
+    && sed -i -e "s/#implementationClass = iped.engine.task.transcript.WhisperTranscriptTask/implementationClass = iped.engine.task.transcript.WhisperTranscriptTask/" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
     && echo "#####################################" \
     && echo "Configuring GraphConfig with our default values:BR" \
     && echo "#####################################" \
@@ -78,15 +91,6 @@ RUN --mount=type=secret,id=ACTION_GH_TOKEN export ACTION_GH_TOKEN=$(cat /run/sec
     && echo "Removing comentary from numFramesEquation" \
     && echo "#####################################" \
     && sed -i -e "s/#numFramesEquation =/numFramesEquation =/" /opt/IPED/iped/conf/VideoThumbsConfig.txt \    
-    && echo "#####################################" \
-    && echo "Uncommenting a audiotranscription flags to enable entrypoint value filling" \
-    && echo "#####################################" \
-    && sed -i -e "s/# huggingFaceModel = lgris/huggingFaceModel = lgris/" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
-    && sed -i -e "s/# remoteServiceAddress = 127.0.0.1:11111/remoteServiceAddress = 127.0.0.1:11111/" /opt/IPED/iped/conf/AudioTranscriptConfig.txt \
-    # && echo "#####################################" \
-    # && echo "Removing IPED's TSK-JAVA-JNI lib to avoid conflict of libs" \
-    # && echo "#####################################" \
-    # && rm -v /opt/IPED/iped/lib/sleuthkit-4.12.0.p1.jar \
     && echo "#####################################" \
     && echo "TEMP PATCH JEP-4.2.0 to avoid conflict of libs" \
     && echo "#####################################" \
