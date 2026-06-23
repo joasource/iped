@@ -17,9 +17,9 @@ git clone https://github.com/joasource/iped
 cd iped
 
 # Compilando as versões
-docker build . -f Dockerfile.dependencies -t joasource/iped:dependencies
-docker build . -f Dockerfile.processor -t joasource/iped:processor
-docker build . -t joasource/iped
+docker build . -f Dockerfile.dependencies -t joaca/iped:dependencies
+docker build . -f Dockerfile.processor -t joaca/iped:processor
+docker build . -t joaca/iped
 
 ```
 
