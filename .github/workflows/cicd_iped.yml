@@ -1,7 +1,7 @@
-name: Compilar IPED Snapshot
+name: CI/CD IPED Snapshot
 
-on: 
-  workflow_dispatch: # É isso aqui que cria o botão de apertar e rodar no GitHub!
+on:
+  workflow_dispatch: # Permite rodar manualmente no botão "Run workflow" sem precisar de tag
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
       run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
 
     # ==========================================
-    # CACHE E DEPENDÊNCIAS (Pra não compilar CUDA do zero)
+    # 1. DEPENDÊNCIAS (Usa cache pra não demorar 20 anos de novo)
     # ==========================================
     - name: Docker pull dependecies 
       run: docker pull joaca/iped:dependencies || echo "Sem cache anterior"
@@ -29,7 +29,7 @@ jobs:
       run: docker push joaca/iped:dependencies 
 
     # ==========================================
-    # COMPILA O SNAPSHOT (Usa o Token em Segredo)
+    # 2. PROCESSOR (Motor do IPED - Forçando o Snapshot com a sua senha)
     # ==========================================
     - name: Docker build processor-SNAPSHOT 
       uses: docker/build-push-action@v5      
@@ -38,13 +38,15 @@ jobs:
         file: Dockerfile.processor
         tags: joaca/iped:processor-snapshot
         push: true 
+        build-args: |
+          SNAPSHOT=true
         secrets: |
           "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
 
     # ==========================================
-    # MONTA A IMAGEM FINAL (Com Interface)
+    # 3. IMAGEM FINAL (O pacote completo pra galera usar)
     # ==========================================
-    - name: Docker build iped-GUI-SNAPSHOT
+    - name: Docker build iped-SNAPSHOT 
       uses: docker/build-push-action@v5      
       with:
         context: .        
