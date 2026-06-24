@@ -4,13 +4,21 @@ Este repositório é um fork especializado do `iped-docker/iped`, adaptado para 
 
 > **Nota:** Certifique-se de ter o `nvidia-container-toolkit` instalado no seu host para que a GPU seja mapeada corretamente para dentro dos containers.
 
----
+***
 
 ## 💡 Dicas Rápidas (Para quem não quer perder tempo)
 
-##### ⚙️ Build da Imagem
+##### ⚡ Instalação Rápida (Recomendado)
 
-Comando para instalar tudo:
+A forma mais rápida de ter o IPED pronto para uso é baixar a imagem diretamente do Docker Hub, sem necessidade de compilação:
+
+```bash
+docker pull joaca/iped:latest
+```
+
+##### 🔧 Build da Imagem (Para quem quer compilar localmente)
+
+Caso queira construir a imagem na sua própria máquina — seja para aplicar modificações personalizadas, auditar o código, adaptar para um ambiente específico ou simplesmente entender como tudo foi montado — utilize o processo de build a partir do Dockerfile:
 
 ```bash
 git clone https://github.com/joasource/iped
@@ -20,7 +28,6 @@ cd iped
 docker build . -f Dockerfile.dependencies -t joaca/iped:dependencies
 docker build . -f Dockerfile.processor -t joaca/iped:processor
 docker build . -t joaca/iped
-
 ```
 
 ##### Configurando o ambiente (`dkr.source`)
