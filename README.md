@@ -1,4 +1,4 @@
-# joasource/iped
+# joaca/iped
 
 Este repositório é um fork especializado do `iped-docker/iped`, adaptado para o meu fluxo de trabalho. O foco aqui é **performance bruta e recursos avançados**, utilizando **Whisper** para transcrição de áudio, **reconhecimento facial** de alta performance e suporte nativo à **aceleração via GPU NVIDIA (CUDA)**.
 
@@ -39,7 +39,7 @@ Para rodar o IPED com interface gráfica (X11) e com as permissões de GPU corre
 source dkr.source
 
 # Agora basta usar o comando 'dkr' para executar os containers
-dkr joasource/iped
+dkr joaca/iped
 
 ```
 
@@ -78,7 +78,7 @@ sudo dkr -v /mnt/evidences:/evidences \
    -v ~/ipedlog:/opt/IPED/iped/log \
    -v ~/output:/output \
    -v ~/.cache/huggingface/hub:/root/.cache/huggingface/hub/ \
-    joasource/iped java -jar /opt/IPED/iped/iped.jar \
+    joaca/iped java -jar /opt/IPED/iped/iped.jar \
    -d /evidences/evidence.ufdr \
    -o /output/IPED_OUTPUT
 
@@ -91,7 +91,7 @@ Após o processamento, abra o resultado na interface do IPED:
 ```bash
 sudo dkr -v /mnt/evidences:/evidences \
          -v /mnt/ipedtmp:/mnt/ipedtmp \
-         joasource/iped java -jar \
+         joaca/iped java -jar \
          /evidences/iped-output/iped/lib/iped-search-app.jar
 
 ```
@@ -100,7 +100,7 @@ sudo dkr -v /mnt/evidences:/evidences \
 
 ## 🛠️ Por que este Fork?
 
-O `joasource/iped` foi refinado para:
+O `joaca/iped` foi refinado para:
 
 * **Integração com Whisper:** Transcrição de áudio via GPU.
 * **Reconhecimento Facial:** Ajustado para rodar nativamente com CUDA.
