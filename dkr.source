@@ -1,18 +1,34 @@
 #!/bin/bash
 dkr () 
 {
-  xhost +
+  xhost + > /dev/null 2>&1
+
+  # Resolve a treta do X11 no WSLg vs Linux Nativo
+  if [ -d "/mnt/wslg/.X11-unix" ]; then
+      X11_SOCKET="/mnt/wslg/.X11-unix"
+  else
+      X11_SOCKET="/tmp/.X11-unix"
+  fi
+
+  # Só injeta os devices de vídeo/áudio se eles existirem no host
+  DEVICES=""
+  if [ -e "/dev/dri" ]; then
+      DEVICES="$DEVICES --device /dev/dri"
+  fi
+  if [ -e "/dev/snd" ]; then
+      DEVICES="$DEVICES --device /dev/snd"
+  fi
+
   docker run --gpus all --rm -it -v "`pwd`":"`pwd`":Z \
-          -e DISPLAY -e GDK_BACKEND \
+          -e DISPLAY=$DISPLAY -e GDK_BACKEND \
           -e GDK_SCALE \
           -e GDK_DPI_SCALE \
           -e QT_DEVICE_PIXEL_RATIO \
           -e LANG=C.UTF-8 \
           -e LC_ALL=C.UTF-8 \
           -e NO_AT_BRIDGE=1 \
-          --device /dev/dri \
-          --device /dev/snd \
+          $DEVICES \
           -v /etc/localtime:/etc/localtime:ro \
-          -v /tmp/.X11-unix/:/tmp/.X11-unix/ "$@"
+          -v $X11_SOCKET:/tmp/.X11-unix "$@"
 }
 export -f dkr
