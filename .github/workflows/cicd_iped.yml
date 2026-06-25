@@ -1,4 +1,4 @@
-name: IPED snapshot
+name: BUILD IPED
 
 on: [push]
 
