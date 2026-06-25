@@ -15,6 +15,10 @@ A forma mais rápida de ter o IPED pronto para uso é baixar a imagem diretament
 ```bash
 docker pull joaca/iped:snapshot
 ```
+Ou para o release stable 4.3.0:
+```bash
+docker pull joaca/iped:v4.3.0
+```
 
 ##### 🔧 Build da Imagem (Para quem quer compilar localmente)
 
