@@ -1,171 +1,58 @@
-name: MANDA BALA!
+name: MANDA
 
-on:
-  push:
-    tags:
-      - 'iped_*' # Aciona com qualquer tag que comece com iped_
+on: [push]
 
 jobs:
-  # ==========================================
-  # 1. PREPARAÇÃO: Build das Dependências (Roda sempre)
-  # ==========================================
-  build-dependencies:
+  build:
+    
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+
+    if: startsWith(github.ref, 'refs/tags/iped_') 
+    
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
+    
+    - name: Set Environment
+      run: echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1      
       
-      - name: Set Environment
-        run: echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
+    - name: Docker login      
+      run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
 
-      - name: Docker login (Docker Hub)
-        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
+#
+# using classic build on dependencies, because is the only way to cache now.
+#
+    - name: Docker pull dependecies-RELEASE 
+      run: docker pull joaca/iped:dependencies || echo could not pull
 
-      - name: Docker login (GitHub Packages)
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Docker build dependecies-RELEASE 
+      run: docker build --cache-from joaca/iped:dependencies . -f Dockerfile.dependencies -t joaca/iped:dependencies
 
-      - name: Docker pull dependecies 
-        run: docker pull joaca/iped:dependencies || echo could not pull
+    - name: Docker push dependecies-RELEASE 
+      run: |
+        docker tag joaca/iped:dependencies joaca/iped:dependencies_${{ env.VERSION }}
+        docker push joaca/iped:dependencies 
+        docker push joaca/iped:dependencies_${{ env.VERSION }}
 
-      - name: Docker build dependecies 
-        run: docker build --cache-from joaca/iped:dependencies . -f Dockerfile.dependencies -t joaca/iped:dependencies
+    - name: Docker build processor-RELEASE 
+      uses: docker/build-push-action@v4      
+      with:
+        context: .
+        file: Dockerfile.processor
+        tags: | 
+          joaca/iped:processor
+          joaca/iped:processor_${{ env.VERSION }}
+        push: true 
+        secrets: |
+          "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
 
-      - name: Docker push dependecies
-        run: |
-          docker tag joaca/iped:dependencies joaca/iped:dependencies_${{ env.VERSION }}
-          docker push joaca/iped:dependencies 
-          docker push joaca/iped:dependencies_${{ env.VERSION }}
-          
-          docker tag joaca/iped:dependencies ghcr.io/joasource/iped:dependencies
-          docker tag joaca/iped:dependencies ghcr.io/joasource/iped:dependencies_${{ env.VERSION }}
-          docker push ghcr.io/joasource/iped:dependencies 
-          docker push ghcr.io/joasource/iped:dependencies_${{ env.VERSION }}
-
-  # ==========================================
-  # 2. JOB RELEASE (SÓ RODA SE A TAG NÃO FOR SNAPSHOT)
-  # ==========================================
-  build-release:
-    needs: build-dependencies
-    if: github.ref != 'refs/tags/iped_snapshot' # Pulo do gato aqui
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set Environment
-        run: echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1      
-        
-      - name: Docker login (Docker Hub)
-        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
-
-      - name: Docker login (GitHub Packages)
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker build processor-RELEASE 
-        uses: docker/build-push-action@v4      
-        with:
-          context: .
-          file: Dockerfile.processor
-          build-args: |
-            SNAPSHOT=false
-            IPED_RELEASE_VERSION=${{ env.VERSION }}
-          load: true
-          tags: | 
-            joaca/iped:processor
-            joaca/iped:processor_${{ env.VERSION }}
-            ghcr.io/joasource/iped:processor
-            ghcr.io/joasource/iped:processor_${{ env.VERSION }}
-          secrets: |
-            "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
-
-      - name: Push processor-RELEASE tags
-        run: |
-          docker push joaca/iped:processor
-          docker push joaca/iped:processor_${{ env.VERSION }}
-          docker push ghcr.io/joasource/iped:processor
-          docker push ghcr.io/joasource/iped:processor_${{ env.VERSION }}
-
-      - name: Docker build iped-RELEASE 
-        uses: docker/build-push-action@v4      
-        with:
-          context: .        
-          tags: | 
-            joaca/iped:latest
-            joaca/iped:${{ env.VERSION }}
-            ghcr.io/joasource/iped:latest
-            ghcr.io/joasource/iped:${{ env.VERSION }}
-          push: true
-
-  # ==========================================
-  # 3. JOB SNAPSHOT (SÓ RODA SE A TAG FOR EXATAMENTE 'iped_snapshot')
-  # ==========================================
-  build-snapshot:
-    needs: build-dependencies
-    if: github.ref == 'refs/tags/iped_snapshot' # A mágica acontece aqui
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set Environment
-        run: echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1      
-        
-      - name: Docker login (Docker Hub)
-        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
-
-      - name: Docker login (GitHub Packages)
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker build processor-SNAPSHOT 
-        uses: docker/build-push-action@v4      
-        with:
-          context: .
-          file: Dockerfile.processor
-          build-args: |
-            SNAPSHOT=true
-            SNAPSHOT_WORKFLOW_ID=28028043063
-          load: true 
-          tags: | 
-            joaca/iped:processor
-            joaca/iped:processor_snapshot
-            ghcr.io/joasource/iped:processor_snapshot
-          secrets: |
-            "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
-            
-      - name: Push processor-SNAPSHOT tags
-        run: |
-          docker push joaca/iped:processor_snapshot
-          docker push ghcr.io/joasource/iped:processor_snapshot
-
-      - name: Docker build iped-SNAPSHOT 
-        uses: docker/build-push-action@v4      
-        with:
-          context: .        
-          tags: | 
-            joaca/iped:snapshot
-            ghcr.io/joasource/iped:snapshot
-          push: true
+    - name: Docker build iped-RELEASE 
+      uses: docker/build-push-action@v4      
+      with:
+        context: .        
+        tags: | 
+          joaca/iped:latest
+          joaca/iped:${{ env.VERSION }}
+        push: true
