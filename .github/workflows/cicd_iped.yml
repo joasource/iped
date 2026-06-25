@@ -9,6 +9,11 @@ jobs:
 
     if: startsWith(github.ref, 'refs/tags/iped_') 
     
+    # 1. PERMISSÃO NECESSÁRIA: Libera o GitHub Actions para escrever pacotes no repositório
+    permissions:
+      contents: read
+      packages: write
+
     steps:
     - uses: actions/checkout@v3
     
@@ -18,8 +23,16 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1      
       
-    - name: Docker login      
+    - name: Docker login (Docker Hub)
       run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
+
+    # 2. SEGUNDO LOGIN: Autenticando no GitHub Container Registry
+    - name: Docker login (GitHub Packages)
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
 #
 # using classic build on dependencies, because is the only way to cache now.
@@ -32,18 +45,29 @@ jobs:
 
     - name: Docker push dependecies-RELEASE 
       run: |
+        # Tag e Push pro Docker Hub
         docker tag joaca/iped:dependencies joaca/iped:dependencies_${{ env.VERSION }}
         docker push joaca/iped:dependencies 
         docker push joaca/iped:dependencies_${{ env.VERSION }}
+        
+        # 3. Tag e Push manual pro GitHub Packages
+        # Obs: Usando joasource/iped que é a org/repo onde roda o workflow
+        docker tag joaca/iped:dependencies ghcr.io/joasource/iped:dependencies
+        docker tag joaca/iped:dependencies ghcr.io/joasource/iped:dependencies_${{ env.VERSION }}
+        docker push ghcr.io/joasource/iped:dependencies 
+        docker push ghcr.io/joasource/iped:dependencies_${{ env.VERSION }}
 
     - name: Docker build processor-RELEASE 
       uses: docker/build-push-action@v4      
       with:
         context: .
         file: Dockerfile.processor
+        # 4. Adicionando as tags do GHCR direto no Buildx
         tags: | 
           joaca/iped:processor
           joaca/iped:processor_${{ env.VERSION }}
+          ghcr.io/joasource/iped:processor
+          ghcr.io/joasource/iped:processor_${{ env.VERSION }}
         push: true 
         secrets: |
           "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
@@ -52,7 +76,10 @@ jobs:
       uses: docker/build-push-action@v4      
       with:
         context: .        
+        # 5. Adicionando as tags do GHCR para a imagem latest
         tags: | 
           joaca/iped:latest
           joaca/iped:${{ env.VERSION }}
+          ghcr.io/joasource/iped:latest
+          ghcr.io/joasource/iped:${{ env.VERSION }}
         push: true
