@@ -9,17 +9,28 @@ jobs:
 
     if: startsWith(github.ref, 'refs/tags/iped_') 
     
+    # 1. Permissões necessárias para o GITHUB_TOKEN conseguir gravar no GHCR
+    permissions:
+      contents: read
+      packages: write
+
     steps:
     - uses: actions/checkout@v3
     
     - name: Set Environment
-      run: echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
+      run: |
+        echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
+        echo GHCR_REPO=$(echo ghcr.io/${{ github.repository }} | tr '[:upper:]' '[:lower:]') >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1      
       
-    - name: Docker login      
+    - name: Docker login (Docker Hub)
       run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
+
+    # 2. Login no GitHub Container Registry usando o token nativo do Actions
+    - name: Docker login (GHCR)
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
 #
 # using classic build on dependencies, because is the only way to cache now.
@@ -30,12 +41,23 @@ jobs:
     - name: Docker build dependecies-RELEASE 
       run: docker build --cache-from joaca/iped:dependencies . -f Dockerfile.dependencies -t joaca/iped:dependencies
 
+    # 3. Fazendo tag e push em ambos os registries no step manual
     - name: Docker push dependecies-RELEASE 
       run: |
+        # Tags Docker Hub
         docker tag joaca/iped:dependencies joaca/iped:dependencies_${{ env.VERSION }}
+        # Tags GHCR
+        docker tag joaca/iped:dependencies ${{ env.GHCR_REPO }}:dependencies
+        docker tag joaca/iped:dependencies ${{ env.GHCR_REPO }}:dependencies_${{ env.VERSION }}
+
+        # Push Docker Hub
         docker push joaca/iped:dependencies 
         docker push joaca/iped:dependencies_${{ env.VERSION }}
+        # Push GHCR
+        docker push ${{ env.GHCR_REPO }}:dependencies
+        docker push ${{ env.GHCR_REPO }}:dependencies_${{ env.VERSION }}
 
+    # 4. Adicionando as tags do GHCR direto nas actions de build
     - name: Docker build processor-RELEASE 
       uses: docker/build-push-action@v4      
       with:
@@ -44,6 +66,8 @@ jobs:
         tags: | 
           joaca/iped:processor
           joaca/iped:processor_${{ env.VERSION }}
+          ${{ env.GHCR_REPO }}:processor
+          ${{ env.GHCR_REPO }}:processor_${{ env.VERSION }}
         push: true 
         secrets: |
           "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
@@ -55,4 +79,6 @@ jobs:
         tags: | 
           joaca/iped:latest
           joaca/iped:${{ env.VERSION }}
+          ${{ env.GHCR_REPO }}:latest
+          ${{ env.GHCR_REPO }}:${{ env.VERSION }}
         push: true
