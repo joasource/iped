@@ -13,7 +13,7 @@ Este repositório é um fork especializado do `iped-docker/iped`, adaptado para 
 A forma mais rápida de ter o IPED pronto para uso é baixar a imagem diretamente do Docker Hub, sem necessidade de compilação:
 
 ```bash
-docker pull joaca/iped:latest
+docker pull joaca/iped:snapshot
 ```
 
 ##### 🔧 Build da Imagem (Para quem quer compilar localmente)
