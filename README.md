@@ -82,7 +82,9 @@ docker build \
 
 *Nota: Para encontrar o `SNAPSHOT_WORKFLOW_ID`, acesse a página de [Actions do repositório oficial do IPED](https://github.com/sepinf-inc/IPED/actions). Clique na execução do workflow desejado (o "run") e observe o número de identificação que aparece na URL do seu navegador (ex: `.../actions/runs/28046804277` — o ID é `28046804277`).*
 
-##### Configurando o ambiente (`dkr.source`)
+---
+
+### 🖥️ Configurando o ambiente (`dkr.source`)
 
 Para rodar o IPED com interface gráfica (X11) e com as permissões de GPU corretas, utilize o script `dkr.source`. Ele cria a função `dkr` que facilita o deploy:
 
