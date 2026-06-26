@@ -20,19 +20,67 @@ Ou para o release stable 4.3.0:
 docker pull joaca/iped:v4.3.0
 ```
 
-##### 🔧 Build da Imagem (Para quem quer compilar localmente)
+### 🛠️ Workflow de Compilação Local (Build)
 
-Caso queira construir a imagem na sua própria máquina — seja para aplicar modificações personalizadas, auditar o código, adaptar para um ambiente específico ou simplesmente entender como tudo foi montado — utilize o processo de build a partir do Dockerfile:
+Se você precisa construir as imagens na sua própria máquina — seja para aplicar modificações, auditar o código ou adaptar para o seu ambiente no GAECO — utilize o processo de *build* seguindo esta ordem lógica.
+
+#### 1. Construindo a Imagem Base (Dependências)
+
+Esta etapa é a mais demorada, pois compila bibliotecas forenses, CUDA e PyTorch. Ela é feita separadamente para que o Docker possa usar o *cache* e evitar reprocessar tudo toda vez que você alterar apenas o código do IPED.
 
 ```bash
-git clone https://github.com/joasource/iped
-cd iped
-
-# Compilando as versões
 docker build . -f Dockerfile.dependencies -t joaca/iped:dependencies
-docker build . -f Dockerfile.processor -t joaca/iped:processor
-docker build . -t joaca/iped
+
 ```
+
+#### 2. Construindo a Imagem do Processador (IPED)
+
+Após ter a base, compilamos a versão do IPED propriamente dita. Escolha uma das opções abaixo conforme a sua necessidade:
+
+**Opção A: Versão Estável (Release)**
+Ideal para rodar uma versão oficial testada. Substitua `4.3.0` pela versão desejada.
+
+```bash
+docker build \
+  --build-arg SNAPSHOT=false \
+  --build-arg IPED_RELEASE_VERSION=4.3.0 \
+  -f Dockerfile.processor \
+  -t joaca/iped:v4.3.0 .
+
+```
+
+**Opção B: Versão Snapshot (Automática)**
+Utiliza um artefato gerado via GitHub Actions. Para isso, você precisará de um `Personal Access Token` (PAT) do GitHub.
+
+**Passo 1: Criando seu Token (PAT)**
+
+1. No GitHub, clique na sua foto de perfil > **Settings**.
+2. No menu lateral esquerdo, vá em **Developer settings** > **Personal access tokens** > **Tokens (classic)**.
+3. Clique em **Generate new token (classic)**.
+4. Dê um nome (ex: `build-iped`), marque a permissão `repo` (especialmente `repo:status` e `public_repo`) e a permissão `workflow`.
+5. Clique em **Generate token** e copie o código (ele começa com `ghp_...`). **Guarde-o bem**, pois não aparecerá novamente.
+
+**Passo 2: Exportando o Token no terminal**
+Antes de buildar, exporte o token para a sessão do seu terminal:
+
+```bash
+export ACTION_GH_TOKEN="seu_token_aqui"
+
+```
+
+**Passo 3: Executando o Build**
+
+```bash
+docker build \
+  --build-arg SNAPSHOT=true \
+  --build-arg SNAPSHOT_WORKFLOW_ID=ID_DO_WORKFLOW \
+  --secret id=ACTION_GH_TOKEN,env=ACTION_GH_TOKEN \
+  -f Dockerfile.processor \
+  -t joaca/iped:snapshot .
+
+```
+
+*Nota: Para encontrar o `SNAPSHOT_WORKFLOW_ID`, acesse a página de [Actions do repositório oficial do IPED](https://github.com/sepinf-inc/IPED/actions). Clique na execução do workflow desejado (o "run") e observe o número de identificação que aparece na URL do seu navegador (ex: `.../actions/runs/28046804277` — o ID é `28046804277`).*
 
 ##### Configurando o ambiente (`dkr.source`)
 
