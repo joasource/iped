@@ -31,6 +31,7 @@ Inicie clonando o repositório:
 
 ```bash
 git clone https://github.com/joasource/iped.git
+cd iped
 ```
 E depois:
 
