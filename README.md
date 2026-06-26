@@ -27,6 +27,12 @@ Se você precisa construir as imagens na sua própria máquina — seja para apl
 #### 1. Construindo a Imagem Base (Dependências)
 
 Esta etapa é a mais demorada, pois compila bibliotecas forenses, CUDA e PyTorch. Ela é feita separadamente para que o Docker possa usar o *cache* e evitar reprocessar tudo toda vez que você alterar apenas o código do IPED.
+Inicie clonando o repositório:
+
+```bash
+git clone https://github.com/joasource/iped.git
+```
+E depois:
 
 ```bash
 docker build . -f Dockerfile.dependencies -t joaca/iped:dependencies
