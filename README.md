@@ -393,37 +393,30 @@ wsl --install -d Ubuntu
 Execute a sequência de comandos abaixo dentro do terminal do Linux para configurar o repositório oficial e instalar o motor por linha de comando:
 
 ```bash
-# Atualizar os índices de pacotes do sistema
-sudo apt-get update && sudo apt-get upgrade -y
-
-# Instalar as dependências necessárias
-sudo apt-get install ca-certificates curl gnupg lsb-release -y
-
-# Importar a chave GPG oficial do Docker
-curl -fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.docker.com/linux/ubuntu/gpg) | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Adicionar o repositório estável ao APT
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu) $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Instalar o motor e o client do Docker
-sudo apt-get update && sudo apt-get install docker-ce docker-ce-cli containerd.io -y
+sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release && \
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
+sudo usermod -aG docker $USER && \
+echo -e "\n# Start Docker daemon automatically\nif [ -z \"\$(pgrep -f dockerd)\" ]; then\n  sudo service docker start > /dev/null 2>&1\nfi" >> ~/.bashrc
 ```
 
 ### 3. Instalar o NVIDIA Container Toolkit (Terminal Ubuntu)
 Com o Docker pronto, configure o suporte a GPU para permitir aceleração de hardware dentro dos seus containers:
 
 ```bash
-# Adicionar o repositório oficial da NVIDIA
-curl -fsSL [https://nvidia.github.io/libnvidia-container/gpgkey](https://nvidia.github.io/libnvidia-container/gpgkey) | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && curl -s -L [https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list](https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list) | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-
-# Instalar o Toolkit da NVIDIA
-sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-
-# Configurar o daemon do Docker para injetar o runtime da NVIDIA
-sudo nvidia-ctk runtime configure --runtime=docker
-
-# Reiniciar o daemon do Docker para validar as alterações
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && \
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list && \
+\
+sudo apt-get update && \
+sudo apt-get install -y nvidia-container-toolkit && \
+\
+sudo nvidia-ctk runtime configure --runtime=docker && \
+\
 sudo service docker restart
+newgrp docker
 ```
 
 ### 4. Validação da GPU no Container
