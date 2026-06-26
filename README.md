@@ -398,6 +398,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
 sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
 sudo usermod -aG docker $USER && \
+newgrp docker && \
 echo -e "\n# Start Docker daemon automatically\nif [ -z \"\$(pgrep -f dockerd)\" ]; then\n  sudo service docker start > /dev/null 2>&1\nfi" >> ~/.bashrc
 ```
 
@@ -416,7 +417,6 @@ sudo apt-get install -y nvidia-container-toolkit && \
 sudo nvidia-ctk runtime configure --runtime=docker && \
 \
 sudo service docker restart
-newgrp docker
 ```
 
 ### 4. Validação da GPU no Container
