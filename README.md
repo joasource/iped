@@ -385,7 +385,7 @@ iped_phone_region=
 Antes de começar, garanta que o subsistema Linux está ativo e atualizado no Windows Host:
 
 ```powershell
-wsl --install -d Ubuntu
+wsl --install Ubuntu-24.04
 ```
 *(Se já tiver a distribuição Ubuntu ativa, basta abrir o terminal dela pelo menu Iniciar).*
 
