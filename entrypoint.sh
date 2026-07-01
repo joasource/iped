@@ -4,6 +4,8 @@ PHOTODNA=false
 HASHESDB=false
 COUNTRY='BR'
 
+
+
 echo -n Populating IPED plugins directory with extra plugins...
 if [ -d /mnt/plugins ] && [ ! -z "$(ls /mnt/plugins)" ]
 then
@@ -122,14 +124,14 @@ done
 for v in $( for file in $( find /opt/IPED/iped/conf/ -type f | grep Config.txt \
                 | grep -v -i regex); do grep "=" $file | grep -v "^host =" \
                 | grep -v "^port = " | cut -d "=" -f 1 \
-                | grep -v "\." | sed 's/^#[ \t]*//' | grep -v supportedMimes \
-                | awk '{ if ($0 != "\r" ) {gsub(/^[ \t]+|[ \t]+$/, "", $0); print "iped_"$0;} }';\
-            done | sort -u )        
+                | grep -v "\." | grep -v "^#" | grep -v supportedMimes \
+                | awk '{ if ($0 != "\r" ) {print "iped_"$0;} }';\
+            done )        
 do
+        echo ${v}=${!v}
         if [ "${!v}" ]
         then
-                echo ${v}=${!v}
-                find /opt/IPED/iped/conf/ -type f | grep Config.txt | grep -v -i regex | xargs sed -i -e "s|^#*[ \t]*${v#iped_}[ \t]*=.*|${v#iped_} = ${!v}|" 
+                find /opt/IPED/iped/conf/ -type f | grep Config.txt | grep -v -i regex | xargs sed -i -e "s|${v#iped_} =.*|${v#iped_} = ${!v}|" 
         fi
 done
 
@@ -162,9 +164,9 @@ then
         chown -RL tmpuser:tmpuser /root/.cache && chmod +x /root && \
         echo "Executing command as UID $USERID..." && \
         sudo -u tmpuser --chdir=${PWD} --preserve-env=SAL_USE_VCLPLUGIN,JAVA_HOME,LD_LIBRARY_PATH,IPED_VERSION $@ || \
-        echo "Running as UID $USERID Failed."          
+        echo "Running as UID $USERID Failed."         
         
-else                  
+else                 
         # no arguments = bash, otherwise exec then
         echo "Executing command as ROOT..."
         exec "$@"
