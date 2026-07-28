@@ -45,14 +45,14 @@ docker build . -f Dockerfile.dependencies -t joaca/iped:dependencies
 Após ter a base, compilamos a versão do IPED propriamente dita. Escolha uma das opções abaixo conforme a sua necessidade:
 
 **Opção A: Versão Estável (Release)**
-Ideal para rodar uma versão oficial testada. Substitua `4.3.0` pela versão desejada.
+Ideal para rodar uma versão oficial testada. Substitua `4.3.1` pela versão desejada.
 
 ```bash
 docker build \
   --build-arg SNAPSHOT=false \
-  --build-arg IPED_RELEASE_VERSION=4.3.0 \
+  --build-arg IPED_RELEASE_VERSION=4.3.1 \
   -f Dockerfile.processor \
-  -t joaca/iped:v4.3.0 .
+  -t joaca/iped:v4.3.1 .
 
 ```
 
