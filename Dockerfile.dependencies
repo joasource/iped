@@ -1,13 +1,13 @@
 # A "stack" (CUDA + Ubuntu + Python + torch) e definida em stacks/<nome>.env e passada
 # via --build-arg (ver build.sh e o workflow). Os defaults abaixo sao a stack estavel
-# atual (stacks/u2204-cu121.env) e servem apenas para builds manuais sem argumentos.
-ARG CUDA_VERSION=12.1.1
+# atual (stacks/u2204-cu126.env) e servem apenas para builds manuais sem argumentos.
+ARG CUDA_VERSION=12.6.3
 ARG UBUNTU_VERSION=22.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 
 ARG CUDA_VERSION
 ARG UBUNTU_VERSION
-ARG TORCH_CUDA=cu121
+ARG TORCH_CUDA=cu126
 ARG PYVER=3.9
 ARG JEP_VERSION=4.2.0
 ARG PKGTMPDIR=/tmp/pkgs 
@@ -15,7 +15,7 @@ ARG PIP_ROOT_USER_ACTION=ignore
 ARG CMAKE_POLICY_VERSION_MINIMUM=3.5
 # libyal: "nome" (master) ou "nome@ref" (tag/commit). Ordem importa (dependencias).
 # O libyal nao publica releases: a "versao" e a data do ultimo commit do master. Os commits
-# abaixo sao os que estavam no master no build de 2026-09-21 (stack u2204-cu121 validada).
+# abaixo sao os que estavam no master no build de 2026-09-21 (validados nas stacks u2204-cu121 e u2204-cu126).
 ARG LIBYAL_PHASE1="libbfio@0f74c456673220c0cb185004409d98f6a51b9d86 libvslvm@374b78d97ea9522620209819a75e2c64e58921d1 libvmdk@a56a64dbdf4a0ccd3e8efd3746cdd56c507d2ed6 libvhdi@f6416e99973e816cf3a6d37b9e025d6aff1dd57f libewf@b6e9fdab4a549ec978d7b0eed9a013c88135f005"
 ARG LIBYAL_PHASE2="libagdb@30e57a864fa42da7aa0265fdb57840b2896ff87a libevtx@bc9e5d8b31918aef28d908d080468d83f58dff18 libevt@0d50613be31fe986e17a7e6f05b0e3254925ad87 libscca@26f6e913502ccda63e105f8ea6f4a217a5aee0a8 libesedb@08bf68f80ebcb08becff05f1ff3713aa4a97d886 libpff@05ec9a179a41f011012f4a9da216ebf3fb406fc7 libmsiecf@ddc601a7b08b0bedc1344f3033f25cbe5f25a18d"
 

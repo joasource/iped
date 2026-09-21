@@ -9,7 +9,7 @@ on: [push]
 # stack indicada mas publicam SOMENTE tags com o sufixo da stack; nunca alteram
 # latest, dependencies nem processor.
 env:
-  STABLE_STACK: u2204-cu121
+  STABLE_STACK: u2204-cu126
 
 jobs:
   build:

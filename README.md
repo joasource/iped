@@ -96,7 +96,7 @@ docker build . -t joaca/iped
 
 #### 🔄 Atualizando CUDA / distro (stacks)
 
-A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2204-cu121` = a estável atual, `u2204-cu126` = candidata). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
+A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2204-cu126` = a estável atual, `u2204-cu121` = a anterior, preservada para rollback). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
 
 ```bash
 # 1. Constrói a imagem de dependências da stack candidata (tag local, não mexe em joaca/iped:dependencies)
@@ -114,8 +114,8 @@ docker build --build-arg SNAPSHOT=false --build-arg IPED_RELEASE_VERSION=4.3.1 \
 
 - **Fixar versões do pip:** `constraints/<cuXXX>.txt` restringe o `pip install`. Para gerar a partir de uma imagem que funciona: `docker run --rm --entrypoint python <imagem> -m pip freeze > constraints/cu121.txt`. Imagens novas também trazem `/etc/iped-pip-freeze.txt` e `/etc/iped-dpkg.txt`.
 - **No CI:** a tag `iped_4.3.1` publica a stack `STABLE_STACK` (definida no workflow) como sempre. A tag `iped_4.3.1__u2204-cu126` constrói a candidata e publica **apenas** tags com o sufixo da stack (`dependencies_u2204-cu126`, `processor_4.3.1_u2204-cu126`, `4.3.1_u2204-cu126`), sem tocar em `latest`.
-- **Promover:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e crie a tag estável.
-- **Rollback:** `joaca/iped:dependencies_u2204-cu121` é a imagem estável anterior, preservada. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
+- **Promover:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e crie a tag estável. Uma tag estável `iped_X` sobrescreve `latest`, `dependencies` e `processor`; antes, faça o retag imutável do estado atual (`docker buildx imagetools create --tag joaca/iped:<nome>_<stack>-<AAAAMMDD> joaca/iped@sha256:<digest>`).
+- **Rollback:** a produção anterior (stack `u2204-cu121`) está preservada no Docker Hub em `latest_u2204-cu121-20260921`, `dependencies_u2204-cu121-20260921` e `processor_u2204-cu121-20260921`. Para voltar, reaponte `latest` (`docker buildx imagetools create --tag joaca/iped:latest joaca/iped:latest_u2204-cu121-20260921`) e faça o mesmo para `dependencies` e `processor`. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
 - **libyal:** para fixar versões, passe `--build-arg LIBYAL_PHASE1="libbfio@AAAAMMDD ..."` (ou edite os defaults no `Dockerfile.dependencies`).
 
 ---
