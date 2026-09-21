@@ -1,8 +1,29 @@
-FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+# A "stack" (CUDA + Ubuntu + Python + torch) e definida em stacks/<nome>.env e passada
+# via --build-arg (ver build.sh e o workflow). Os defaults abaixo sao a stack estavel
+# atual (stacks/u2204-cu121.env) e servem apenas para builds manuais sem argumentos.
+ARG CUDA_VERSION=12.1.1
+ARG UBUNTU_VERSION=22.04
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 
+ARG CUDA_VERSION
+ARG UBUNTU_VERSION
+ARG TORCH_CUDA=cu121
+ARG PYVER=3.9
+ARG JEP_VERSION=4.2.0
 ARG PKGTMPDIR=/tmp/pkgs 
 ARG PIP_ROOT_USER_ACTION=ignore 
 ARG CMAKE_POLICY_VERSION_MINIMUM=3.5
+# libyal: "nome" (master) ou "nome@ref" (tag/commit). Ordem importa (dependencias).
+# O libyal nao publica releases: a "versao" e a data do ultimo commit do master. Os commits
+# abaixo sao os que estavam no master no build de 2026-09-21 (stack u2204-cu121 validada).
+ARG LIBYAL_PHASE1="libbfio@0f74c456673220c0cb185004409d98f6a51b9d86 libvslvm@374b78d97ea9522620209819a75e2c64e58921d1 libvmdk@a56a64dbdf4a0ccd3e8efd3746cdd56c507d2ed6 libvhdi@f6416e99973e816cf3a6d37b9e025d6aff1dd57f libewf@b6e9fdab4a549ec978d7b0eed9a013c88135f005"
+ARG LIBYAL_PHASE2="libagdb@30e57a864fa42da7aa0265fdb57840b2896ff87a libevtx@bc9e5d8b31918aef28d908d080468d83f58dff18 libevt@0d50613be31fe986e17a7e6f05b0e3254925ad87 libscca@26f6e913502ccda63e105f8ea6f4a217a5aee0a8 libesedb@08bf68f80ebcb08becff05f1ff3713aa4a97d886 libpff@05ec9a179a41f011012f4a9da216ebf3fb406fc7 libmsiecf@ddc601a7b08b0bedc1344f3033f25cbe5f25a18d"
+
+LABEL iped.stack.cuda="${CUDA_VERSION}" \
+      iped.stack.ubuntu="${UBUNTU_VERSION}" \
+      iped.stack.torch="${TORCH_CUDA}" \
+      iped.stack.python="${PYVER}" \
+      iped.stack.jep="${JEP_VERSION}"
 
 ENV TZ=Brazil/East \
     DEBIAN_FRONTEND=noninteractive \
@@ -10,8 +31,11 @@ ENV TZ=Brazil/East \
     LC_ALL=C.UTF-8 \
     SAL_USE_VCLPLUGIN='gtk' \
     JAVA_HOME=/usr/lib/jvm/bellsoft-java11-full-amd64/ \
-    LD_LIBRARY_PATH=/usr/lib/:/usr/local/lib/python3.9/dist-packages/jep/:/usr/local/lib/python3.9/dist-packages/nvidia/cudnn/lib/ \
-    CLASSPATH=/usr/local/lib/python3.9/dist-packages/jep/jep.jar:$CLASSPATH
+    PYVER=${PYVER} \
+    JEP_VERSION=${JEP_VERSION} \
+    PYLIB=/usr/local/lib/python${PYVER}/dist-packages
+ENV LD_LIBRARY_PATH=/usr/lib/:${PYLIB}/jep/:${PYLIB}/nvidia/cudnn/lib/ \
+    CLASSPATH=${PYLIB}/jep/jep.jar:$CLASSPATH
 
 # BLOCO 1: Repositorios e Instalacoes Nativas (APT)
 RUN mkdir -p ${PKGTMPDIR} \
@@ -37,61 +61,58 @@ RUN mkdir -p ${PKGTMPDIR} \
         libwebp-dev librsvg2-dev libopenexr-dev libatomic1 vim less libparse-win32registry-perl \
         tesseract-ocr tesseract-ocr-osd tesseract-ocr-por tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-frk tesseract-ocr-ita \
         graphviz bellsoft-java11-full mplayer rifiuti2 \
-        python3.9 python3.9-distutils python3-pip python3.9-dev python3-setuptools \
+        python${PYVER} python${PYVER}-distutils python3-pip python${PYVER}-dev python3-setuptools \
         sudo libssl-dev
 
+COPY resources/build-libyal.sh resources/ewf.cpp.patch ${PKGTMPDIR}/
+
 # BLOCO 2: Bibliotecas libyal (Fase 1)
-RUN cd ${PKGTMPDIR} && git clone https://github.com/libyal/libbfio && cd libbfio && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libbfio \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libvslvm && cd libvslvm && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libvslvm \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libvmdk && cd libvmdk && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libvmdk \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libvhdi && cd libvhdi && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libvhdi \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libewf && cd libewf && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libewf
+RUN bash ${PKGTMPDIR}/build-libyal.sh ${LIBYAL_PHASE1}
 
 # BLOCO 3: AFFLIBv3 & SleuthKit
 RUN cd ${PKGTMPDIR} && git clone -b v3.7.20 https://github.com/sshock/AFFLIBv3 && cd AFFLIBv3 && ./bootstrap.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/AFFLIBv3 \
     && cd ${PKGTMPDIR} && git clone -b 4.12.0_iped_patch https://github.com/sepinf-inc/sleuthkit && cd sleuthkit/ \
-    && curl https://raw.githubusercontent.com/iped-docker/iped/master/resources/ewf.cpp.patch --output ${PKGTMPDIR}/ewf.cpp.patch \
     && patch tsk/img/ewf.cpp < ${PKGTMPDIR}/ewf.cpp.patch \
     && ./bootstrap && ./configure --prefix=/usr/ --enable-java && make && make install && rm -rf ${PKGTMPDIR}/sleuthkit/
 
 # BLOCO 4: Bibliotecas libyal (Fase 2)
-RUN cd ${PKGTMPDIR} && git clone https://github.com/libyal/libagdb.git && cd libagdb && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libagdb \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libevtx && cd libevtx && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libevtx \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libevt && cd libevt && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libevt \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libscca && cd libscca && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libscca \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libesedb && cd libesedb && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libesedb \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libpff && cd libpff && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libpff \
-    && cd ${PKGTMPDIR} && git clone https://github.com/libyal/libmsiecf && cd libmsiecf && ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/libmsiecf
+RUN bash ${PKGTMPDIR}/build-libyal.sh ${LIBYAL_PHASE2}
 
 # BLOCO 5: Rifiuti2, ImageMagick e Configuração do MPlayer (Original)
 RUN update-alternatives --install /usr/bin/rifiuti rifiuti /usr/bin/rifiuti2 1 \
     && cd ${PKGTMPDIR} && git clone --branch "7.1.1-21" https://github.com/ImageMagick/ImageMagick && cd ImageMagick && ./configure --prefix=/usr && make all install && rm -rf ${PKGTMPDIR}/ImageMagick \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1 \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python${PYVER} 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYVER} 1 \
     && echo "Creating mplayer config..." \
     && mplayer < /dev/null || true
 
 # BLOCO 6: CUDA, PyTorch, cuDNN e Dlib (O Coracao da GPU)
+# constraints/<TORCH_CUDA>.txt fixa as versoes do pip (gerado com pip freeze de uma imagem que funciona)
+COPY constraints/${TORCH_CUDA}.txt ${PKGTMPDIR}/constraints.txt
 RUN cd /root/ \
     && python -m pip install pip --upgrade \
-    && python -m pip install "setuptools<60.0.0" wheel cmake jep==4.2.0 \
+    && python -m pip install -c ${PKGTMPDIR}/constraints.txt "setuptools<60.0.0" wheel cmake jep==${JEP_VERSION} \
     && echo "--> 1. Instalando o PyTorch PRIMEIRO para puxar as bibliotecas do cuDNN..." \
-    && python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
+    && python -m pip install -c ${PKGTMPDIR}/constraints.txt torch torchvision torchaudio --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
     && echo "--> 2. Aplicando a linkagem forense do cuDNN para o sistema..." \
-    && ln -sf /usr/local/lib/python3.9/dist-packages/nvidia/cudnn/include/* /usr/include/ \
-    && ln -sf /usr/local/lib/python3.9/dist-packages/nvidia/cudnn/lib/libcudnn.so.* /usr/lib/x86_64-linux-gnu/libcudnn.so \
-    && ln -sf /usr/local/lib/python3.9/dist-packages/nvidia/cudnn/lib/libcudnn_ops.so.* /usr/lib/x86_64-linux-gnu/libcudnn_ops.so \
-    && ln -sf /usr/local/lib/python3.9/dist-packages/nvidia/cudnn/lib/libcudnn_cnn.so.* /usr/lib/x86_64-linux-gnu/libcudnn_cnn.so \
-    && ln -sf /usr/local/lib/python3.9/dist-packages/nvidia/cudnn/lib/libcudnn_adv.so.* /usr/lib/x86_64-linux-gnu/libcudnn_adv.so \
+    && ln -sf ${PYLIB}/nvidia/cudnn/include/* /usr/include/ \
+    && ln -sf ${PYLIB}/nvidia/cudnn/lib/libcudnn.so.* /usr/lib/x86_64-linux-gnu/libcudnn.so \
+    && ln -sf ${PYLIB}/nvidia/cudnn/lib/libcudnn_ops.so.* /usr/lib/x86_64-linux-gnu/libcudnn_ops.so \
+    && ln -sf ${PYLIB}/nvidia/cudnn/lib/libcudnn_cnn.so.* /usr/lib/x86_64-linux-gnu/libcudnn_cnn.so \
+    && ln -sf ${PYLIB}/nvidia/cudnn/lib/libcudnn_adv.so.* /usr/lib/x86_64-linux-gnu/libcudnn_adv.so \
     && ldconfig \
     && echo "--> 3. Compilando o dlib a forca com o CMAKE apontando para a GPU..." \
-    && CMAKE_ARGS="-DDLIB_USE_CUDA=1" python -m pip install dlib==19.24.2 \
+    && CMAKE_ARGS="-DDLIB_USE_CUDA=1" python -m pip install -c ${PKGTMPDIR}/constraints.txt dlib==19.24.2 \
+    && echo "--> 3b. Confirmando que o dlib foi compilado COM CUDA (senao ele cai para CPU em silencio)..." \
+    && python -c "import dlib, sys; print('DLIB_USE_CUDA =', dlib.DLIB_USE_CUDA); sys.exit(0 if dlib.DLIB_USE_CUDA else 1)" \
     && echo "--> 4. Instalando dependencias restantes..." \
-    && python -m pip install transformers face_recognition opencv-python==4.11.0.86 faster-whisper gputil beautifulsoup4 \
-    && python -m pip install --force-reinstall numpy==1.26.4
+    && python -m pip install -c ${PKGTMPDIR}/constraints.txt transformers face_recognition opencv-python==4.11.0.86 faster-whisper gputil beautifulsoup4 \
+    && python -m pip install -c ${PKGTMPDIR}/constraints.txt --force-reinstall numpy==1.26.4 \
+    && python -m pip freeze > /etc/iped-pip-freeze.txt
 
 # BLOCO 7: Limpeza Final
-RUN apt-get remove -y python3-pip build-essential autoconf automake autopoint libtool pkg-config yasm gettext flex byacc ant ant-optional \
+RUN dpkg-query -W > /etc/iped-dpkg.txt \
+    && apt-get remove -y python3-pip build-essential autoconf automake autopoint libtool pkg-config yasm gettext flex byacc ant ant-optional \
     && apt-get autoremove -y \
     && rm -rfv /root/.cache/pip && rm -rfv ${PKGTMPDIR}/* && apt-get clean && rm -rfv /var/lib/apt/lists/*
 

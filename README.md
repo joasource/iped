@@ -94,6 +94,30 @@ docker build \
 docker build . -t joaca/iped
 ```
 
+#### 🔄 Atualizando CUDA / distro (stacks)
+
+A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2204-cu121` = a estável atual, `u2204-cu126` = candidata). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
+
+```bash
+# 1. Constrói a imagem de dependências da stack candidata (tag local, não mexe em joaca/iped:dependencies)
+./build.sh u2204-cu126
+
+# 2. Testa com GPU (torch, dlib com CUDA, ctranslate2/whisper, JVM -> jep -> torch...)
+docker run --gpus all --rm -v "$PWD/smoke-test.sh":/smoke-test.sh:ro \
+  --entrypoint bash joaca/iped:dependencies_u2204-cu126 /smoke-test.sh
+
+# 3. Só depois de passar: constrói o processor em cima da candidata e teste o IPED numa amostra pequena
+docker build --build-arg SNAPSHOT=false --build-arg IPED_RELEASE_VERSION=4.3.1 \
+  --build-arg BASE_IMAGE=joaca/iped:dependencies_u2204-cu126 \
+  -f Dockerfile.processor -t joaca/iped:processor_u2204-cu126 .
+```
+
+- **Fixar versões do pip:** `constraints/<cuXXX>.txt` restringe o `pip install`. Para gerar a partir de uma imagem que funciona: `docker run --rm --entrypoint python <imagem> -m pip freeze > constraints/cu121.txt`. Imagens novas também trazem `/etc/iped-pip-freeze.txt` e `/etc/iped-dpkg.txt`.
+- **No CI:** a tag `iped_4.3.1` publica a stack `STABLE_STACK` (definida no workflow) como sempre. A tag `iped_4.3.1__u2204-cu126` constrói a candidata e publica **apenas** tags com o sufixo da stack (`dependencies_u2204-cu126`, `processor_4.3.1_u2204-cu126`, `4.3.1_u2204-cu126`), sem tocar em `latest`.
+- **Promover:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e crie a tag estável.
+- **Rollback:** `joaca/iped:dependencies_u2204-cu121` é a imagem estável anterior, preservada. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
+- **libyal:** para fixar versões, passe `--build-arg LIBYAL_PHASE1="libbfio@AAAAMMDD ..."` (ou edite os defaults no `Dockerfile.dependencies`).
+
 ---
 
 ### 🖥️ Configurando o ambiente (`dkr.source`)

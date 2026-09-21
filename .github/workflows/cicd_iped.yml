@@ -2,13 +2,22 @@ name: BUILD IPED
 
 on: [push]
 
+# Stack (CUDA + Ubuntu + Python + torch) usada pelas tags estaveis "iped_<versao>".
+# Definida em stacks/<nome>.env. Para promover uma stack candidata, troque este valor.
+#
+# Tags candidatas "iped_<versao>__<stack>" (ex.: iped_4.3.1__u2204-cu126) constroem a
+# stack indicada mas publicam SOMENTE tags com o sufixo da stack; nunca alteram
+# latest, dependencies nem processor.
+env:
+  STABLE_STACK: u2204-cu121
+
 jobs:
   build:
-    
+
     runs-on: ubuntu-latest
 
-    if: startsWith(github.ref, 'refs/tags/iped_') 
-    
+    if: startsWith(github.ref, 'refs/tags/iped_')
+
     # 1. Permissões necessárias para o GITHUB_TOKEN conseguir gravar no GHCR
     permissions:
       contents: read
@@ -16,17 +25,50 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Set Environment
       run: |
-        echo VERSION=${GITHUB_REF#refs/tags/iped_} >> $GITHUB_ENV
-        echo GHCR_REPO=$(echo ghcr.io/${{ github.repository }} | tr '[:upper:]' '[:lower:]') >> $GITHUB_ENV
+        TAG=${GITHUB_REF#refs/tags/iped_}
+        if [[ "$TAG" == *__* ]]; then
+          VERSION=${TAG%%__*}
+          STACK=${TAG#*__}
+          DEPS_MAIN=dependencies_${STACK}
+          DEPS_TAGS="dependencies_${STACK}"
+          PROCESSOR_TAGS="processor_${VERSION}_${STACK}"
+          FINAL_TAGS="${VERSION}_${STACK}"
+          PROCESSOR_BASE=processor_${VERSION}_${STACK}
+        else
+          VERSION=$TAG
+          STACK=$STABLE_STACK
+          DEPS_MAIN=dependencies
+          DEPS_TAGS="dependencies dependencies_${VERSION}"
+          PROCESSOR_TAGS="processor processor_${VERSION}"
+          FINAL_TAGS="latest ${VERSION}"
+          PROCESSOR_BASE=processor
+        fi
+        [[ "$VERSION" =~ ^[A-Za-z0-9._-]+$ && "$STACK" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Nome de tag invalido: $TAG"; exit 1; }
+        test -f stacks/${STACK}.env || { echo "Stack '${STACK}' nao existe em stacks/"; exit 1; }
+        GHCR_REPO=$(echo ghcr.io/${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+
+        # "tag1 tag2" -> uma imagem por linha, nos dois registries
+        tags_for() { for t in $1; do echo "joaca/iped:$t"; echo "$GHCR_REPO:$t"; done; }
+
+        echo VERSION=$VERSION >> $GITHUB_ENV
+        echo STACK=$STACK >> $GITHUB_ENV
+        echo GHCR_REPO=$GHCR_REPO >> $GITHUB_ENV
+        echo DEPS_MAIN=$DEPS_MAIN >> $GITHUB_ENV
+        echo DEPS_TAGS=$DEPS_TAGS >> $GITHUB_ENV
+        echo "STACK_ARGS=$(grep -E '^[A-Z_0-9]+=' stacks/${STACK}.env | sed 's/^/--build-arg /' | tr '\n' ' ')" >> $GITHUB_ENV
+        { echo 'PROCESSOR_TAGS<<EOF'; tags_for "$PROCESSOR_TAGS"; echo EOF; } >> $GITHUB_ENV
+        { echo 'FINAL_TAGS<<EOF'; tags_for "$FINAL_TAGS"; echo EOF; } >> $GITHUB_ENV
+        echo PROCESSOR_BUILD_ARGS=BASE_IMAGE=joaca/iped:$DEPS_MAIN >> $GITHUB_ENV
+        echo FINAL_BUILD_ARGS=BASE_IMAGE=joaca/iped:$PROCESSOR_BASE >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1      
-      
+      uses: docker/setup-buildx-action@v1
+
     - name: Docker login (Docker Hub)
-      run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}  
+      run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}
 
     # 2. Login no GitHub Container Registry usando o token nativo do Actions
     - name: Docker login (GHCR)
@@ -35,50 +77,38 @@ jobs:
 #
 # using classic build on dependencies, because is the only way to cache now.
 #
-    - name: Docker pull dependecies-RELEASE 
-      run: docker pull joaca/iped:dependencies || echo could not pull
+    - name: Docker pull dependecies
+      run: docker pull joaca/iped:$DEPS_MAIN || echo could not pull
 
-    - name: Docker build dependecies-RELEASE 
-      run: docker build --cache-from joaca/iped:dependencies . -f Dockerfile.dependencies -t joaca/iped:dependencies
+    - name: Docker build dependecies
+      run: docker build --cache-from joaca/iped:$DEPS_MAIN $STACK_ARGS . -f Dockerfile.dependencies -t joaca/iped:$DEPS_MAIN
 
     # 3. Fazendo tag e push em ambos os registries no step manual
-    - name: Docker push dependecies-RELEASE 
+    - name: Docker push dependecies
       run: |
-        # Tags Docker Hub
-        docker tag joaca/iped:dependencies joaca/iped:dependencies_${{ env.VERSION }}
-        # Tags GHCR
-        docker tag joaca/iped:dependencies ${{ env.GHCR_REPO }}:dependencies
-        docker tag joaca/iped:dependencies ${{ env.GHCR_REPO }}:dependencies_${{ env.VERSION }}
-
-        # Push Docker Hub
-        docker push joaca/iped:dependencies 
-        docker push joaca/iped:dependencies_${{ env.VERSION }}
-        # Push GHCR
-        docker push ${{ env.GHCR_REPO }}:dependencies
-        docker push ${{ env.GHCR_REPO }}:dependencies_${{ env.VERSION }}
+        for t in $DEPS_TAGS; do
+          docker tag joaca/iped:$DEPS_MAIN joaca/iped:$t
+          docker tag joaca/iped:$DEPS_MAIN $GHCR_REPO:$t
+          docker push joaca/iped:$t
+          docker push $GHCR_REPO:$t
+        done
 
     # 4. Adicionando as tags do GHCR direto nas actions de build
-    - name: Docker build processor-RELEASE 
-      uses: docker/build-push-action@v4      
+    - name: Docker build processor
+      uses: docker/build-push-action@v4
       with:
         context: .
         file: Dockerfile.processor
-        tags: | 
-          joaca/iped:processor
-          joaca/iped:processor_${{ env.VERSION }}
-          ${{ env.GHCR_REPO }}:processor
-          ${{ env.GHCR_REPO }}:processor_${{ env.VERSION }}
-        push: true 
+        tags: ${{ env.PROCESSOR_TAGS }}
+        build-args: ${{ env.PROCESSOR_BUILD_ARGS }}
+        push: true
         secrets: |
           "ACTION_GH_TOKEN=${{ secrets.ACTION_GH_TOKEN }}"
 
-    - name: Docker build iped-RELEASE 
-      uses: docker/build-push-action@v4      
+    - name: Docker build iped
+      uses: docker/build-push-action@v4
       with:
-        context: .        
-        tags: | 
-          joaca/iped:latest
-          joaca/iped:${{ env.VERSION }}
-          ${{ env.GHCR_REPO }}:latest
-          ${{ env.GHCR_REPO }}:${{ env.VERSION }}
+        context: .
+        tags: ${{ env.FINAL_TAGS }}
+        build-args: ${{ env.FINAL_BUILD_ARGS }}
         push: true

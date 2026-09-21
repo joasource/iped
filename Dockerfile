@@ -1,4 +1,5 @@
-FROM joaca/iped:processor
+ARG BASE_IMAGE=joaca/iped:processor
+FROM ${BASE_IMAGE}
 
 # Para abrir o iped-search no docker
 # 
