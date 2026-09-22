@@ -8,6 +8,9 @@ on: [push]
 # Tags candidatas "iped_<versao>__<stack>" (ex.: iped_4.3.1__u2204-cu126) constroem a
 # stack indicada mas publicam SOMENTE tags com o sufixo da stack; nunca alteram
 # latest, dependencies nem processor.
+#
+# A versao na tag define o IPED instalado: "snapshot" usa o SNAPSHOT_WORKFLOW_ID do
+# Dockerfile.processor; qualquer outra (4.3.1, v4.3.1) instala essa release.
 env:
   STABLE_STACK: u2204-cu126
 
@@ -48,6 +51,16 @@ jobs:
         fi
         [[ "$VERSION" =~ ^[A-Za-z0-9._-]+$ && "$STACK" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Nome de tag invalido: $TAG"; exit 1; }
         test -f stacks/${STACK}.env || { echo "Stack '${STACK}' nao existe em stacks/"; exit 1; }
+
+        # O IPED instalado segue o nome da tag: "snapshot" -> SNAPSHOT_WORKFLOW_ID do
+        # Dockerfile.processor; "4.3.1" ou "v4.3.1" -> release 4.3.1. Assim a tag publicada
+        # nunca diz uma versao e contem outra.
+        if [[ "$VERSION" == snapshot ]]; then
+          IPED_ARGS="SNAPSHOT=true"
+        else
+          IPED_ARGS="SNAPSHOT=false
+        IPED_RELEASE_VERSION=${VERSION#v}"
+        fi
         GHCR_REPO=$(echo ghcr.io/${{ github.repository }} | tr '[:upper:]' '[:lower:]')
 
         # "tag1 tag2" -> uma imagem por linha, nos dois registries
@@ -61,7 +74,7 @@ jobs:
         echo "STACK_ARGS=$(grep -E '^[A-Z_0-9]+=' stacks/${STACK}.env | sed 's/^/--build-arg /' | tr '\n' ' ')" >> $GITHUB_ENV
         { echo 'PROCESSOR_TAGS<<EOF'; tags_for "$PROCESSOR_TAGS"; echo EOF; } >> $GITHUB_ENV
         { echo 'FINAL_TAGS<<EOF'; tags_for "$FINAL_TAGS"; echo EOF; } >> $GITHUB_ENV
-        echo PROCESSOR_BUILD_ARGS=BASE_IMAGE=joaca/iped:$DEPS_MAIN >> $GITHUB_ENV
+        { echo 'PROCESSOR_BUILD_ARGS<<EOF'; echo "BASE_IMAGE=joaca/iped:$DEPS_MAIN"; echo "$IPED_ARGS"; echo EOF; } >> $GITHUB_ENV
         echo FINAL_BUILD_ARGS=BASE_IMAGE=joaca/iped:$PROCESSOR_BASE >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
