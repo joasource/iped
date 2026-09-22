@@ -2,15 +2,19 @@ name: BUILD IPED
 
 on: [push]
 
-# Stack (CUDA + Ubuntu + Python + torch) usada pelas tags estaveis "iped_<versao>".
-# Definida em stacks/<nome>.env. Para promover uma stack candidata, troque este valor.
+# Stack (CUDA + Ubuntu + Python + torch) usada pelas tags estaveis. Definida em
+# stacks/<nome>.env. Para promover uma stack candidata, troque STABLE_STACK.
 #
-# Tags candidatas "iped_<versao>__<stack>" (ex.: iped_4.3.1__u2204-cu126) constroem a
-# stack indicada mas publicam SOMENTE tags com o sufixo da stack; nunca alteram
-# latest, dependencies nem processor.
-#
-# A versao na tag define o IPED instalado: "snapshot" usa o SNAPSHOT_WORKFLOW_ID do
-# Dockerfile.processor; qualquer outra (4.3.1, v4.3.1) instala essa release.
+# Tags (o nome define o IPED instalado e o que e publicado):
+#   iped_snapshot                snapshot do SNAPSHOT_WORKFLOW_ID do Dockerfile.processor
+#   iped_snapshot-<run id>       snapshot desse run do IPED (sem editar o Dockerfile)
+#       -> publicam latest, snapshot, processor, dependencies (+ snapshot-<run id>)
+#   iped_v4.3.1 / iped_4.3.1     release 4.3.1
+#       -> publica SO v4.3.1, processor_v4.3.1, dependencies_v4.3.1 (nao toca em latest)
+#   iped_<qualquer acima>__<stack>   candidata: constroi a stack indicada e publica SO
+#       tags com o sufixo da stack; nunca altera latest, dependencies nem processor.
+# Cada build usa bases com nome proprio da versao (dependencies_<v>, processor_<v>), para
+# que dois runs simultaneos nao montem uma imagem sobre o processor do outro.
 env:
   STABLE_STACK: u2204-cu126-py312
 
@@ -32,44 +36,59 @@ jobs:
     - name: Set Environment
       run: |
         TAG=${GITHUB_REF#refs/tags/iped_}
-        if [[ "$TAG" == *__* ]]; then
-          VERSION=${TAG%%__*}
-          STACK=${TAG#*__}
-          DEPS_MAIN=dependencies_${STACK}
-          DEPS_TAGS="dependencies_${STACK}"
-          PROCESSOR_TAGS="processor_${VERSION}_${STACK}"
-          FINAL_TAGS="${VERSION}_${STACK}"
-          PROCESSOR_BASE=processor_${VERSION}_${STACK}
-        else
-          VERSION=$TAG
-          STACK=$STABLE_STACK
-          DEPS_MAIN=dependencies
-          DEPS_TAGS="dependencies dependencies_${VERSION}"
-          PROCESSOR_TAGS="processor processor_${VERSION}"
-          FINAL_TAGS="latest ${VERSION}"
-          PROCESSOR_BASE=processor
-        fi
-        [[ "$VERSION" =~ ^[A-Za-z0-9._-]+$ && "$STACK" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Nome de tag invalido: $TAG"; exit 1; }
-        test -f stacks/${STACK}.env || { echo "Stack '${STACK}' nao existe em stacks/"; exit 1; }
+        RAW=${TAG%%__*}
+        [[ "$TAG" == *__* ]] && STACK=${TAG#*__} || STACK=$STABLE_STACK
+        [[ "$STACK" =~ ^[A-Za-z0-9._-]+$ ]] && test -f stacks/${STACK}.env || { echo "Stack '${STACK}' nao existe em stacks/"; exit 1; }
 
-        # O IPED instalado segue o nome da tag: "snapshot" -> SNAPSHOT_WORKFLOW_ID do
-        # Dockerfile.processor; "4.3.1" ou "v4.3.1" -> release 4.3.1. Assim a tag publicada
-        # nunca diz uma versao e contem outra.
-        if [[ "$VERSION" == snapshot ]]; then
-          IPED_ARGS="SNAPSHOT=true"
-        else
+        # O IPED instalado segue o nome da tag, assim a tag publicada nunca diz uma
+        # versao e contem outra. Nomes fora destes formatos sao recusados (um erro de
+        # digitacao como "snapshots" nao pode virar uma release inexistente).
+        if [[ "$RAW" =~ ^snapshot(-([0-9]+))?$ ]]; then
+          NAME=snapshot
+          WFID=${BASH_REMATCH[2]}
+          IPED_ARGS="SNAPSHOT=true${WFID:+
+        SNAPSHOT_WORKFLOW_ID=$WFID}"
+        elif [[ "$RAW" =~ ^v?[0-9]+(\.[0-9]+)*$ ]]; then
+          NAME=$RAW
+          WFID=
           IPED_ARGS="SNAPSHOT=false
-        IPED_RELEASE_VERSION=${VERSION#v}"
+        IPED_RELEASE_VERSION=${RAW#v}"
+        else
+          echo "Nome de tag invalido: $TAG (use snapshot, snapshot-<run id> ou uma versao como v4.3.1)"; exit 1
+        fi
+
+        if [[ "$TAG" == *__* ]]; then
+          DEPS_MAIN=dependencies_${STACK}
+          DEPS_CACHE=$DEPS_MAIN
+          DEPS_TAGS="dependencies_${STACK}"
+          PROCESSOR_BASE=processor_${NAME}_${STACK}
+          PROCESSOR_TAGS="$PROCESSOR_BASE"
+          FINAL_TAGS="${NAME}_${STACK}"
+        else
+          DEPS_MAIN=dependencies_${NAME}
+          DEPS_CACHE=dependencies
+          PROCESSOR_BASE=processor_${NAME}
+          if [[ "$NAME" == snapshot ]]; then
+            # So o snapshot atualiza as tags moveis
+            DEPS_TAGS="dependencies $DEPS_MAIN"
+            PROCESSOR_TAGS="processor $PROCESSOR_BASE"
+            FINAL_TAGS="latest snapshot${WFID:+ snapshot-$WFID}"
+          else
+            DEPS_TAGS="$DEPS_MAIN"
+            PROCESSOR_TAGS="$PROCESSOR_BASE"
+            FINAL_TAGS="$NAME"
+          fi
         fi
         GHCR_REPO=$(echo ghcr.io/${{ github.repository }} | tr '[:upper:]' '[:lower:]')
 
         # "tag1 tag2" -> uma imagem por linha, nos dois registries
         tags_for() { for t in $1; do echo "joaca/iped:$t"; echo "$GHCR_REPO:$t"; done; }
 
-        echo VERSION=$VERSION >> $GITHUB_ENV
+        echo VERSION=$NAME >> $GITHUB_ENV
         echo STACK=$STACK >> $GITHUB_ENV
         echo GHCR_REPO=$GHCR_REPO >> $GITHUB_ENV
         echo DEPS_MAIN=$DEPS_MAIN >> $GITHUB_ENV
+        echo DEPS_CACHE=$DEPS_CACHE >> $GITHUB_ENV
         echo DEPS_TAGS=$DEPS_TAGS >> $GITHUB_ENV
         echo "STACK_ARGS=$(grep -E '^[A-Z_0-9]+=' stacks/${STACK}.env | sed 's/^/--build-arg /' | tr '\n' ' ')" >> $GITHUB_ENV
         { echo 'PROCESSOR_TAGS<<EOF'; tags_for "$PROCESSOR_TAGS"; echo EOF; } >> $GITHUB_ENV
@@ -91,10 +110,10 @@ jobs:
 # using classic build on dependencies, because is the only way to cache now.
 #
     - name: Docker pull dependecies
-      run: docker pull joaca/iped:$DEPS_MAIN || echo could not pull
+      run: docker pull joaca/iped:$DEPS_CACHE || echo could not pull
 
     - name: Docker build dependecies
-      run: docker build --cache-from joaca/iped:$DEPS_MAIN $STACK_ARGS . -f Dockerfile.dependencies -t joaca/iped:$DEPS_MAIN
+      run: docker build --cache-from joaca/iped:$DEPS_CACHE $STACK_ARGS . -f Dockerfile.dependencies -t joaca/iped:$DEPS_MAIN
 
     # 3. Fazendo tag e push em ambos os registries no step manual
     - name: Docker push dependecies

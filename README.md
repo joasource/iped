@@ -113,8 +113,24 @@ docker build --build-arg SNAPSHOT=false --build-arg IPED_RELEASE_VERSION=4.3.1 \
 ```
 
 - **Fixar versões do pip:** `constraints/<cuXXX>.txt` restringe o `pip install`. Para gerar a partir de uma imagem que funciona: `docker run --rm --entrypoint python <imagem> -m pip freeze > constraints/cu121.txt`. Imagens novas também trazem `/etc/iped-pip-freeze.txt` e `/etc/iped-dpkg.txt`.
-- **No CI:** a tag `iped_4.3.1` publica a stack `STABLE_STACK` (definida no workflow) como sempre. A tag `iped_4.3.1__u2204-cu126` constrói a candidata e publica **apenas** tags com o sufixo da stack (`dependencies_u2204-cu126`, `processor_4.3.1_u2204-cu126`, `4.3.1_u2204-cu126`), sem tocar em `latest`.
-- **Promover:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e crie a tag estável. Uma tag estável `iped_X` sobrescreve `latest`, `dependencies` e `processor`; antes, faça o retag imutável do estado atual (`docker buildx imagetools create --tag joaca/iped:<nome>_<stack>-<AAAAMMDD> joaca/iped@sha256:<digest>`).
+- **Publicar pelo CI:** o nome da tag define o IPED instalado e o que é publicado (no Docker Hub e no GHCR):
+
+  | Tag git | IPED | Publica |
+  |---|---|---|
+  | `iped_snapshot` | snapshot do `SNAPSHOT_WORKFLOW_ID` do `Dockerfile.processor` | `latest`, `snapshot`, `processor`, `dependencies` |
+  | `iped_snapshot-<run id>` | snapshot desse run do IPED, sem editar o Dockerfile | o mesmo, mais `snapshot-<run id>` (fixa, para rollback) |
+  | `iped_v4.3.1` | release 4.3.1 | só `v4.3.1`, `processor_v4.3.1`, `dependencies_v4.3.1` (não mexe em `latest`) |
+  | `iped_<qualquer acima>__<stack>` | idem, na stack candidata | só tags com o sufixo da stack (ex.: `v4.3.1_u2204-cu126`) |
+
+  ```bash
+  # Snapshot novo (o ID é o número do run em github.com/sepinf-inc/IPED/actions)
+  git tag iped_snapshot-36000000000 && git push origin iped_snapshot-36000000000
+  # Release
+  git tag iped_v4.4.0 && git push origin iped_v4.4.0
+  # Republicar uma tag que já existe: -f nos dois comandos
+  ```
+  Só o snapshot atualiza `latest`. Outros nomes de tag são recusados pelo CI (um erro como `iped_snapshots` não publica nada). Cada build usa bases com o nome da própria versão, então dá para publicar snapshot e release ao mesmo tempo.
+- **Promover uma stack:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e publique um snapshot (e, se quiser, o release). Antes, faça o retag imutável do estado atual (`docker buildx imagetools create --tag joaca/iped:<nome>_<stack>-<AAAAMMDD> joaca/iped@sha256:<digest>`).
 - **Rollback:** a produção com Python 3.9 (stack `u2204-cu126`, IPED snapshot) está preservada no Docker Hub e no GHCR em `latest_u2204-cu126-snapshot-20260922`, `processor_u2204-cu126-snapshot-20260922` e `dependencies_u2204-cu126-20260922`. A anterior a ela (stack `u2204-cu121`) está preservada no Docker Hub em `latest_u2204-cu121-20260921`, `dependencies_u2204-cu121-20260921` e `processor_u2204-cu121-20260921`. Para voltar, reaponte `latest` (`docker buildx imagetools create --tag joaca/iped:latest joaca/iped:latest_u2204-cu121-20260921`) e faça o mesmo para `dependencies` e `processor`. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
 - **libyal:** para fixar versões, passe `--build-arg LIBYAL_PHASE1="libbfio@AAAAMMDD ..."` (ou edite os defaults no `Dockerfile.dependencies`).
 
