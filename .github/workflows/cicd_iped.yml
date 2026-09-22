@@ -12,7 +12,7 @@ on: [push]
 # A versao na tag define o IPED instalado: "snapshot" usa o SNAPSHOT_WORKFLOW_ID do
 # Dockerfile.processor; qualquer outra (4.3.1, v4.3.1) instala essa release.
 env:
-  STABLE_STACK: u2204-cu126
+  STABLE_STACK: u2204-cu126-py312
 
 jobs:
   build:

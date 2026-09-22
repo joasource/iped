@@ -8,14 +8,14 @@ FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 ARG CUDA_VERSION
 ARG UBUNTU_VERSION
 ARG TORCH_CUDA=cu126
-ARG PYVER=3.9
+ARG PYVER=3.12
 ARG JEP_VERSION=4.2.0
 # setuptools<60 (bundled pkg_resources usa pkgutil.ImpImporter, removido no 3.12) e setuptools>=82
 # (remove pkg_resources, que o face_recognition_models ainda usa) quebram. Faixa valida: [60, 82).
 # Precisa de PISO explicito: um teto sozinho (ex. "<82") deixa o pip aceitar o setuptools 59.6.0
 # do apt do sistema (compartilhado via /usr/lib/python3/dist-packages) como "ja satisfeito" e pular
 # a instalacao, mantendo a versao quebrada visivel para qualquer PYVER.
-ARG SETUPTOOLS_CONSTRAINT="setuptools<60.0.0"
+ARG SETUPTOOLS_CONSTRAINT="setuptools==75.6.0"
 ARG PKGTMPDIR=/tmp/pkgs 
 ARG PIP_ROOT_USER_ACTION=ignore 
 ARG CMAKE_POLICY_VERSION_MINIMUM=3.5

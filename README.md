@@ -96,26 +96,26 @@ docker build . -t joaca/iped
 
 #### 🔄 Atualizando CUDA / distro (stacks)
 
-A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2204-cu126` = a estável atual, `u2204-cu121` = a anterior, preservada para rollback). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
+A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2204-cu126-py312` = a estável atual, com Python 3.12; `u2204-cu126` = Python 3.9 e `u2204-cu121` = CUDA 12.1, preservadas para rollback). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
 
 ```bash
 # 1. Constrói a imagem de dependências da stack candidata (tag local, não mexe em joaca/iped:dependencies)
-./build.sh u2204-cu126
+./build.sh u2204-cu126-py312
 
 # 2. Testa com GPU (torch, dlib com CUDA, ctranslate2/whisper, JVM -> jep -> torch...)
 docker run --gpus all --rm -v "$PWD/smoke-test.sh":/smoke-test.sh:ro \
-  --entrypoint bash joaca/iped:dependencies_u2204-cu126 /smoke-test.sh
+  --entrypoint bash joaca/iped:dependencies_u2204-cu126-py312 /smoke-test.sh
 
 # 3. Só depois de passar: constrói o processor em cima da candidata e teste o IPED numa amostra pequena
 docker build --build-arg SNAPSHOT=false --build-arg IPED_RELEASE_VERSION=4.3.1 \
-  --build-arg BASE_IMAGE=joaca/iped:dependencies_u2204-cu126 \
-  -f Dockerfile.processor -t joaca/iped:processor_u2204-cu126 .
+  --build-arg BASE_IMAGE=joaca/iped:dependencies_u2204-cu126-py312 \
+  -f Dockerfile.processor -t joaca/iped:processor_u2204-cu126-py312 .
 ```
 
 - **Fixar versões do pip:** `constraints/<cuXXX>.txt` restringe o `pip install`. Para gerar a partir de uma imagem que funciona: `docker run --rm --entrypoint python <imagem> -m pip freeze > constraints/cu121.txt`. Imagens novas também trazem `/etc/iped-pip-freeze.txt` e `/etc/iped-dpkg.txt`.
 - **No CI:** a tag `iped_4.3.1` publica a stack `STABLE_STACK` (definida no workflow) como sempre. A tag `iped_4.3.1__u2204-cu126` constrói a candidata e publica **apenas** tags com o sufixo da stack (`dependencies_u2204-cu126`, `processor_4.3.1_u2204-cu126`, `4.3.1_u2204-cu126`), sem tocar em `latest`.
 - **Promover:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e crie a tag estável. Uma tag estável `iped_X` sobrescreve `latest`, `dependencies` e `processor`; antes, faça o retag imutável do estado atual (`docker buildx imagetools create --tag joaca/iped:<nome>_<stack>-<AAAAMMDD> joaca/iped@sha256:<digest>`).
-- **Rollback:** a produção anterior (stack `u2204-cu121`) está preservada no Docker Hub em `latest_u2204-cu121-20260921`, `dependencies_u2204-cu121-20260921` e `processor_u2204-cu121-20260921`. Para voltar, reaponte `latest` (`docker buildx imagetools create --tag joaca/iped:latest joaca/iped:latest_u2204-cu121-20260921`) e faça o mesmo para `dependencies` e `processor`. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
+- **Rollback:** a produção com Python 3.9 (stack `u2204-cu126`, IPED snapshot) está preservada no Docker Hub e no GHCR em `latest_u2204-cu126-snapshot-20260922`, `processor_u2204-cu126-snapshot-20260922` e `dependencies_u2204-cu126-20260922`. A anterior a ela (stack `u2204-cu121`) está preservada no Docker Hub em `latest_u2204-cu121-20260921`, `dependencies_u2204-cu121-20260921` e `processor_u2204-cu121-20260921`. Para voltar, reaponte `latest` (`docker buildx imagetools create --tag joaca/iped:latest joaca/iped:latest_u2204-cu121-20260921`) e faça o mesmo para `dependencies` e `processor`. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
 - **libyal:** para fixar versões, passe `--build-arg LIBYAL_PHASE1="libbfio@AAAAMMDD ..."` (ou edite os defaults no `Dockerfile.dependencies`).
 
 ---
@@ -406,6 +406,24 @@ iped_computeFromThumbnail=
 iped_minFileSize=
 iped_skipHashDBFiles=
 iped_phone_region=
+```
+
+### GPU na estimativa de idade e no reconhecimento facial
+
+O padrão da imagem é idade na CPU e detecção de rostos `hog`, que roda em qualquer máquina. Com GPU, use:
+
+| Variável | Valores | Efeito |
+|---|---|---|
+| `iped_ageDevice` | `cpu` (padrão), `gpu` | Estimativa de idade na GPU. Mesmo modelo e mesmo resultado, ~20x mais rápida. |
+| `iped_ageBatchSize` | número (padrão 50) | Rostos por lote na estimativa de idade. `16` foi o valor testado numa GPU de 12 GB. |
+| `iped_faceDetectionModel` | `hog` (padrão), `cnn` | Detector de rostos na GPU. **Muda o método:** acha mais rostos (+35% no teste) e é ~3x mais lento. |
+| `iped_numFaceRecognitionProcesses` | número | Processos do reconhecimento facial. Com `cnn`, cada um ocupa VRAM (`3` chegou a ~9,8 GB). |
+
+Não use `iped_device` nem `iped_batchSize` para isso: essas chaves existem em vários arquivos (transcrição de áudio, classificador remoto) e seriam alteradas em todos.
+
+Exemplo, só a idade na GPU (sem mudar o método de detecção):
+```bash
+dkr -e iped_ageDevice=gpu -e iped_ageBatchSize=16 ... joaca/iped java -jar /opt/IPED/iped/iped.jar ...
 ```
 
 # 🚀 Configuração do Docker Engine + NVIDIA Container Toolkit no WSL2

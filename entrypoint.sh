@@ -135,6 +135,28 @@ do
         fi
 done
 
+# GPU na estimativa de idade e no reconhecimento facial. "device" e "batchSize" existem
+# em varios arquivos de conf/ (iped_device/iped_batchSize mudariam todos), e
+# numFaceRecognitionProcesses vem comentado, por isso tem variaveis proprias.
+# (iped_faceDetectionModel=cnn ja funciona pelo laco acima.)
+AGECONF=/opt/IPED/iped/conf/AgeEstimationConfig.txt
+FACECONF=/opt/IPED/iped/conf/FaceRecognitionConfig.txt
+echo iped_ageDevice=${iped_ageDevice}
+if [ "${iped_ageDevice}" ]
+then
+        sed -i -e "s|^device =.*|device = ${iped_ageDevice}|" ${AGECONF}
+fi
+echo iped_ageBatchSize=${iped_ageBatchSize}
+if [ "${iped_ageBatchSize}" ]
+then
+        sed -i -e "s|^batchSize =.*|batchSize = ${iped_ageBatchSize}|" ${AGECONF}
+fi
+echo iped_numFaceRecognitionProcesses=${iped_numFaceRecognitionProcesses}
+if [ "${iped_numFaceRecognitionProcesses}" ]
+then
+        sed -i -e "s|^#\?numFaceRecognitionProcesses =.*|numFaceRecognitionProcesses = ${iped_numFaceRecognitionProcesses}|" ${FACECONF}
+fi
+
 echo Setting GraphConfig...
 for v in \
         iped_phone_region
