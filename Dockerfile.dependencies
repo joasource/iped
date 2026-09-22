@@ -10,6 +10,12 @@ ARG UBUNTU_VERSION
 ARG TORCH_CUDA=cu126
 ARG PYVER=3.9
 ARG JEP_VERSION=4.2.0
+# setuptools<60 (bundled pkg_resources usa pkgutil.ImpImporter, removido no 3.12) e setuptools>=82
+# (remove pkg_resources, que o face_recognition_models ainda usa) quebram. Faixa valida: [60, 82).
+# Precisa de PISO explicito: um teto sozinho (ex. "<82") deixa o pip aceitar o setuptools 59.6.0
+# do apt do sistema (compartilhado via /usr/lib/python3/dist-packages) como "ja satisfeito" e pular
+# a instalacao, mantendo a versao quebrada visivel para qualquer PYVER.
+ARG SETUPTOOLS_CONSTRAINT="setuptools<60.0.0"
 ARG PKGTMPDIR=/tmp/pkgs 
 ARG PIP_ROOT_USER_ACTION=ignore 
 ARG CMAKE_POLICY_VERSION_MINIMUM=3.5
@@ -61,8 +67,10 @@ RUN mkdir -p ${PKGTMPDIR} \
         libwebp-dev librsvg2-dev libopenexr-dev libatomic1 vim less libparse-win32registry-perl \
         tesseract-ocr tesseract-ocr-osd tesseract-ocr-por tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-frk tesseract-ocr-ita \
         graphviz bellsoft-java11-full mplayer rifiuti2 \
-        python${PYVER} python${PYVER}-distutils python3-pip python${PYVER}-dev python3-setuptools \
-        sudo libssl-dev
+        python${PYVER} python3-pip python${PYVER}-dev python3-setuptools \
+        sudo libssl-dev \
+    && ( apt-get install -y python${PYVER}-distutils \
+         || ( apt-get install -y python${PYVER}-venv && python${PYVER} -m ensurepip --upgrade ) )
 
 COPY resources/build-libyal.sh resources/ewf.cpp.patch ${PKGTMPDIR}/
 
@@ -91,7 +99,7 @@ RUN update-alternatives --install /usr/bin/rifiuti rifiuti /usr/bin/rifiuti2 1 \
 COPY constraints/${TORCH_CUDA}.txt ${PKGTMPDIR}/constraints.txt
 RUN cd /root/ \
     && python -m pip install pip --upgrade \
-    && python -m pip install -c ${PKGTMPDIR}/constraints.txt "setuptools<60.0.0" wheel cmake jep==${JEP_VERSION} \
+    && python -m pip install -c ${PKGTMPDIR}/constraints.txt "${SETUPTOOLS_CONSTRAINT}" wheel cmake jep==${JEP_VERSION} \
     && echo "--> 1. Instalando o PyTorch PRIMEIRO para puxar as bibliotecas do cuDNN..." \
     && python -m pip install -c ${PKGTMPDIR}/constraints.txt torch torchvision torchaudio --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
     && echo "--> 2. Aplicando a linkagem forense do cuDNN para o sistema..." \
