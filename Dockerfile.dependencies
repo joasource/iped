@@ -51,6 +51,8 @@ ENV LD_LIBRARY_PATH=/usr/lib/:${PYLIB}/jep/:${PYLIB}/nvidia/cudnn/lib/ \
 # deadsnakes so quando a distro nao tem o python${PYVER} (ex.: 3.12 no jammy; o noble ja traz o 3.12).
 # PIP_BREAK_SYSTEM_PACKAGES (acima): o python do noble e "externally managed" (PEP 668) e o pip
 # recusaria instalar no sistema; aqui a imagem inteira e o ambiente, sem venv.
+# pip: se o python3-pip do apt ja e do python${PYVER} (noble), nada a fazer; senao (deadsnakes) vem do
+# distutils ou do ensurepip (que o Ubuntu desativa no python do sistema, por isso so como fallback).
 RUN mkdir -p ${PKGTMPDIR} \
     && apt-get update && apt-get install -y curl wget gnupg apt-utils apt-transport-https software-properties-common \
     && apt-get dist-upgrade -y \
@@ -76,7 +78,8 @@ RUN mkdir -p ${PKGTMPDIR} \
         graphviz bellsoft-java11-full mplayer rifiuti2 \
         python${PYVER} python3-pip python${PYVER}-dev python3-setuptools \
         sudo libssl-dev \
-    && ( apt-get install -y python${PYVER}-distutils \
+    && ( python${PYVER} -m pip --version \
+         || apt-get install -y python${PYVER}-distutils \
          || ( apt-get install -y python${PYVER}-venv && python${PYVER} -m ensurepip --upgrade ) )
 
 COPY resources/build-libyal.sh resources/ewf.cpp.patch ${PKGTMPDIR}/
