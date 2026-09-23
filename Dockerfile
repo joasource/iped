@@ -3,10 +3,11 @@ FROM ${BASE_IMAGE}
 
 # Para abrir o iped-search no docker
 # 
+# Pacote do plugin VCL conforme SAL_USE_VCLPLUGIN herdado da base: gtk -> gtk2, gtk3 -> gtk3
 RUN apt-get update && apt-get install -y \
           libreoffice \
           libreoffice-java-common \
-          libreoffice-gtk2 \      
+          libreoffice-$( [ "${SAL_USE_VCLPLUGIN}" = gtk3 ] && echo gtk3 || echo gtk2 ) \
           xdg-utils \
           libgl1-mesa-dri \
           vlc \
