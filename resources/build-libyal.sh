@@ -11,9 +11,13 @@ for spec in "$@"; do
     [[ "${spec}" == *@* ]] && ref=${spec#*@}
 
     echo "--> libyal/${name} (${ref:-master})"
-    git clone --quiet "https://github.com/libyal/${name}" "${PKGTMPDIR}/${name}"
+    # fetch do ref exato (e nao clone + checkout): o libyal reescreve o master com force-push e o
+    # commit fixado deixa de vir no clone, mas o GitHub ainda o entrega quando pedido pelo SHA
+    # (ex.: libesedb 08bf68f, substituido no master em 2026-09-23).
+    git init --quiet "${PKGTMPDIR}/${name}"
     cd "${PKGTMPDIR}/${name}"
-    if [ -n "${ref}" ]; then git checkout --quiet "${ref}"; fi
+    git fetch --quiet --depth 1 "https://github.com/libyal/${name}" "${ref:-HEAD}"
+    git checkout --quiet FETCH_HEAD
     ./synclibs.sh && ./autogen.sh && ./configure --prefix=/usr && make all install
     cd / && rm -rf "${PKGTMPDIR}/${name}"
 done
