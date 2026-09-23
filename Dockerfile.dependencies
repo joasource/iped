@@ -1,8 +1,8 @@
 # A "stack" (CUDA + Ubuntu + Python + torch) e definida em stacks/<nome>.env e passada
 # via --build-arg (ver build.sh e o workflow). Os defaults abaixo sao a stack estavel
-# atual (stacks/u2204-cu126.env) e servem apenas para builds manuais sem argumentos.
+# atual (stacks/u2404-cu126-py312.env) e servem apenas para builds manuais sem argumentos.
 ARG CUDA_VERSION=12.6.3
-ARG UBUNTU_VERSION=22.04
+ARG UBUNTU_VERSION=24.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 
 ARG CUDA_VERSION
@@ -18,7 +18,7 @@ ARG JEP_VERSION=4.2.0
 ARG SETUPTOOLS_CONSTRAINT="setuptools==75.6.0"
 # Plugin VCL do LibreOffice (GUI): "gtk" (gtk2, ate o jammy) ou "gtk3" (noble nao tem libreoffice-gtk2).
 # O Dockerfile da GUI instala o pacote correspondente a partir desta variavel.
-ARG SAL_USE_VCLPLUGIN=gtk
+ARG SAL_USE_VCLPLUGIN=gtk3
 ARG PKGTMPDIR=/tmp/pkgs 
 ARG PIP_ROOT_USER_ACTION=ignore 
 ARG CMAKE_POLICY_VERSION_MINIMUM=3.5

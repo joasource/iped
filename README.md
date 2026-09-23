@@ -96,20 +96,20 @@ docker build . -t joaca/iped
 
 #### 🔄 Atualizando CUDA / distro (stacks)
 
-A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2204-cu126-py312` = a estável atual, com Python 3.12; `u2404-cu126-py312` = candidata em Ubuntu 24.04; `u2204-cu126` = Python 3.9 e `u2204-cu121` = CUDA 12.1, preservadas para rollback). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
+A combinação **CUDA + Ubuntu + Python + torch** é chamada de *stack* e fica em `stacks/<nome>.env` (ex.: `u2404-cu126-py312` = a estável atual, Ubuntu 24.04 com Python 3.12; `u2204-cu126-py312` = Ubuntu 22.04 com Python 3.12; `u2204-cu126` = Python 3.9 e `u2204-cu121` = CUDA 12.1, preservadas para rollback). Os Dockerfiles recebem esses valores por `--build-arg`, então testar outra stack não exige editar nenhum Dockerfile.
 
 ```bash
 # 1. Constrói a imagem de dependências da stack candidata (tag local, não mexe em joaca/iped:dependencies)
-./build.sh u2204-cu126-py312
+./build.sh u2404-cu126-py312
 
 # 2. Testa com GPU (torch, dlib com CUDA, ctranslate2/whisper, JVM -> jep -> torch...)
 docker run --gpus all --rm -v "$PWD/smoke-test.sh":/smoke-test.sh:ro \
-  --entrypoint bash joaca/iped:dependencies_u2204-cu126-py312 /smoke-test.sh
+  --entrypoint bash joaca/iped:dependencies_u2404-cu126-py312 /smoke-test.sh
 
 # 3. Só depois de passar: constrói o processor em cima da candidata e teste o IPED numa amostra pequena
 docker build --build-arg SNAPSHOT=false --build-arg IPED_RELEASE_VERSION=4.3.1 \
-  --build-arg BASE_IMAGE=joaca/iped:dependencies_u2204-cu126-py312 \
-  -f Dockerfile.processor -t joaca/iped:processor_u2204-cu126-py312 .
+  --build-arg BASE_IMAGE=joaca/iped:dependencies_u2404-cu126-py312 \
+  -f Dockerfile.processor -t joaca/iped:processor_u2404-cu126-py312 .
 ```
 
 - **Fixar versões do pip:** `constraints/<cuXXX>.txt` restringe o `pip install`. Para gerar a partir de uma imagem que funciona: `docker run --rm --entrypoint python <imagem> -m pip freeze > constraints/cu121.txt`. Imagens novas também trazem `/etc/iped-pip-freeze.txt` e `/etc/iped-dpkg.txt`.
@@ -131,7 +131,7 @@ docker build --build-arg SNAPSHOT=false --build-arg IPED_RELEASE_VERSION=4.3.1 \
   ```
   Só o snapshot atualiza `latest`. Outros nomes de tag são recusados pelo CI (um erro como `iped_snapshots` não publica nada). Cada build usa bases com o nome da própria versão, então dá para publicar snapshot e release ao mesmo tempo.
 - **Promover uma stack:** troque `STABLE_STACK` no workflow (e os defaults dos `ARG` em `Dockerfile.dependencies`) e publique um snapshot (e, se quiser, o release). Antes, faça o retag imutável do estado atual (`docker buildx imagetools create --tag joaca/iped:<nome>_<stack>-<AAAAMMDD> joaca/iped@sha256:<digest>`).
-- **Rollback:** a produção com Python 3.9 (stack `u2204-cu126`, IPED snapshot) está preservada no Docker Hub e no GHCR em `latest_u2204-cu126-snapshot-20260922`, `processor_u2204-cu126-snapshot-20260922` e `dependencies_u2204-cu126-20260922`. A anterior a ela (stack `u2204-cu121`) está preservada no Docker Hub em `latest_u2204-cu121-20260921`, `dependencies_u2204-cu121-20260921` e `processor_u2204-cu121-20260921`. Para voltar, reaponte `latest` (`docker buildx imagetools create --tag joaca/iped:latest joaca/iped:latest_u2204-cu121-20260921`) e faça o mesmo para `dependencies` e `processor`. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
+- **Rollback:** a produção anterior, Ubuntu 22.04 com Python 3.12 (stack `u2204-cu126-py312`, IPED snapshot), está preservada no Docker Hub e no GHCR em `latest_u2204-cu126-py312-snapshot-20260923`, `processor_u2204-cu126-py312-snapshot-20260923` e `dependencies_u2204-cu126-py312-20260923`. A com Python 3.9 (stack `u2204-cu126`, IPED snapshot) está preservada no Docker Hub e no GHCR em `latest_u2204-cu126-snapshot-20260922`, `processor_u2204-cu126-snapshot-20260922` e `dependencies_u2204-cu126-20260922`. A anterior a ela (stack `u2204-cu121`) está preservada no Docker Hub em `latest_u2204-cu121-20260921`, `dependencies_u2204-cu121-20260921` e `processor_u2204-cu121-20260921`. Para voltar, reaponte `latest` (`docker buildx imagetools create --tag joaca/iped:latest joaca/iped:latest_u2204-cu121-20260921`) e faça o mesmo para `dependencies` e `processor`. No git: branch `backup/pre-cuda-upgrade` / tag `backup_pre_cuda_upgrade`.
 - **Ubuntu 24.04 (`u2404-cu126-py312`):** Python 3.12 nativo (sem deadsnakes), `PIP_BREAK_SYSTEM_PACKAGES=1` (PEP 668), PyYAML/packaging instalados por cima dos do apt (sem RECORD, o pip não os troca), usuário `ubuntu` (UID 1000) removido e `runcwd` liberado no sudoers (para o `USERID` do entrypoint), LibreOffice com `gtk3` (`SAL_USE_VCLPLUGIN=gtk3`; o noble não tem gtk2). Muda de versão junto com a distro: Tesseract 4.1.1 → 5.3.4 (OCR diferente, em geral melhor) e LibreOffice 7.3 → 24.2.
 - **libyal:** para fixar versões, passe `--build-arg LIBYAL_PHASE1="libbfio@AAAAMMDD ..."` (ou edite os defaults no `Dockerfile.dependencies`).
 

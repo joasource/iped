@@ -16,7 +16,7 @@ on: [push]
 # Cada build usa bases com nome proprio da versao (dependencies_<v>, processor_<v>), para
 # que dois runs simultaneos nao montem uma imagem sobre o processor do outro.
 env:
-  STABLE_STACK: u2204-cu126-py312
+  STABLE_STACK: u2404-cu126-py312
 
 jobs:
   build:
