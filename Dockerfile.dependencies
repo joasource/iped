@@ -111,6 +111,9 @@ RUN cd /root/ \
     && echo "--> 0. pip novo em /usr/local; --ignore-installed porque o pip do apt (noble) nao tem RECORD e nao pode ser desinstalado" \
     && python -m pip install --upgrade --ignore-installed pip \
     && python -m pip install -c ${PKGTMPDIR}/constraints.txt "${SETUPTOOLS_CONSTRAINT}" wheel cmake jep==${JEP_VERSION} \
+    && echo "--> 0b. PyYAML/packaging tambem vem do apt (python3-yaml, python3-packaging); no noble sem RECORD, o pip" \
+    && echo "        nao consegue troca-los pela versao do constraints. Instala por cima, em /usr/local (antes no sys.path)" \
+    && python -m pip install -c ${PKGTMPDIR}/constraints.txt --ignore-installed --no-deps PyYAML packaging \
     && echo "--> 1. Instalando o PyTorch PRIMEIRO para puxar as bibliotecas do cuDNN..." \
     && python -m pip install -c ${PKGTMPDIR}/constraints.txt torch torchvision torchaudio --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
     && echo "--> 2. Aplicando a linkagem forense do cuDNN para o sistema..." \
