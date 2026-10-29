@@ -183,7 +183,9 @@ then
         sudo -u tmpuser mplayer >/dev/null 2>&1 && echo "OK" && \
         echo -n "Configuring cache of tmpuser ..." && \
         ln -fs /root/.cache /home/tmpuser/.cache && \
-        chown -RL tmpuser:tmpuser /root/.cache && chmod +x /root || \
+        chown -RL tmpuser:tmpuser /root/.cache && chmod +x /root && \
+        echo -n "Allowing tmpuser to save models (AgeEstimation)..." && \
+        mkdir -p /opt/IPED/iped/models && chown tmpuser:tmpuser /opt/IPED/iped/models && echo "OK" || \
         { echo "Preparing UID $USERID Failed."; exit 1; }
         echo "Executing command as UID $USERID..."
         # "$@" entre aspas preserva os argumentos (ex.: bash -c 'a; b'); exec devolve o codigo de saida do comando

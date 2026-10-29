@@ -1,3 +1,5 @@
 precompiled/iped/
 /Dockerfile
 .gh_token.txt
+.env
+iped.env

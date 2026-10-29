@@ -1,0 +1,65 @@
+# Uso (copie .env.example para .env e ajuste os caminhos uma vez):
+#
+#   Processar:  docker compose run --rm processar -d /evidences/evidencia.ufdr -o /output/CASO
+#   Analisar:   docker compose run --rm analisar /output/CASO/iped/lib/iped-search-app.jar
+#   Shell:      docker compose run --rm shell
+#
+# Os argumentos depois do nome do servico sao repassados para o java do entrypoint.
+# No Linux nativo rode antes "xhost +local:" (no WSLg nao precisa).
+# Crie antes as pastas do .env (mkdir -p): se nao existirem o docker as cria como root
+# e, com USERID, o IPED nao consegue gravar nelas.
+
+name: iped
+
+x-iped: &iped
+  image: ${IPED_IMAGE:-joaca/iped:latest}
+  gpus: all
+  stdin_open: true
+  tty: true
+  # Mesmo efeito do -v "`pwd`":"`pwd`" do dkr: caminhos relativos ao diretorio atual funcionam
+  working_dir: ${PWD}
+  env_file:
+    - path: iped.env
+      required: false
+  environment:
+    DISPLAY: ${DISPLAY:-:0}
+    GDK_BACKEND: ${GDK_BACKEND:-}
+    GDK_SCALE: ${GDK_SCALE:-}
+    GDK_DPI_SCALE: ${GDK_DPI_SCALE:-}
+    QT_DEVICE_PIXEL_RATIO: ${QT_DEVICE_PIXEL_RATIO:-}
+    LANG: C.UTF-8
+    LC_ALL: C.UTF-8
+    NO_AT_BRIDGE: "1"
+    # UID do host: arquivos de saida ficam com o seu dono em vez de root (vazio = root)
+    USERID: ${USERID:-}
+    HASHESDBONTMP: ${HASHESDBONTMP:-false}
+  volumes:
+    - ${PWD}:${PWD}:Z
+    - ${EVIDENCIAS:-/mnt/evidences}:/evidences
+    - ${SAIDA:-~/output}:/output
+    - ${IPEDTMP:-~/ipedtmp}:/mnt/ipedtmp
+    - ${HASHESDB:-~/hashesdb}:/mnt/hashesdb
+    - ${PLUGINS:-~/iped-plugins}:/mnt/plugins
+    - ${LOGS:-~/ipedlog}:/opt/IPED/iped/log
+    - ${HF_CACHE:-~/.cache/huggingface/hub}:/root/.cache/huggingface/hub
+    - /etc/localtime:/etc/localtime:ro
+    # WSLg: /mnt/wslg/.X11-unix | Linux nativo: /tmp/.X11-unix
+    - ${X11_SOCKET:-/tmp/.X11-unix}:/tmp/.X11-unix
+  # Descomente os que existirem no host (o compose falha se o device nao existir)
+  # devices:
+  #   - /dev/dri
+  #   - /dev/snd
+
+services:
+  processar:
+    <<: *iped
+    entrypoint: ["/entrypoint.sh", "java", "-jar", "/opt/IPED/iped/iped.jar"]
+
+  analisar:
+    <<: *iped
+    entrypoint: ["/entrypoint.sh", "java", "-jar"]
+
+  shell:
+    <<: *iped
+    entrypoint: ["/entrypoint.sh"]
+    command: ["/bin/bash"]

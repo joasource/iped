@@ -227,6 +227,40 @@ sudo dkr -v /mnt/evidences:/evidences \
 
 ---
 
+## 🐳 Executando com Docker Compose (alternativa ao `dkr`)
+
+O `docker-compose.yml` reúne GPU, X11, locale e todos os volumes. Os caminhos ficam no `.env`, e não na linha de comando. Funciona com interface gráfica no Linux nativo e no WSL (WSLg). O `dkr` continua funcionando normalmente.
+
+**Configuração (uma vez):**
+
+```bash
+cp .env.example .env          # caminhos de evidências, saída, ipedtmp, hashesdb, plugins, logs, cache do HuggingFace
+cp iped.env.example iped.env  # opcional: variáveis iped_* (uma por linha, em vez de -e)
+
+# Crie as pastas do .env antes: se não existirem, o docker as cria como root e,
+# com USERID, o IPED não consegue gravar nelas
+mkdir -p ~/output ~/ipedtmp ~/hashesdb ~/iped-plugins ~/ipedlog ~/.cache/huggingface/hub
+```
+
+No `.env`, `USERID=1000` faz a saída ficar com o seu usuário como dono (vazio = root). `X11_SOCKET=/tmp/.X11-unix` serve no Linux e no WSLg; se no WSL essa pasta estiver vazia, use `/mnt/wslg/.X11-unix`. No Linux nativo, rode `xhost +local:` antes de abrir a interface (no WSLg não precisa).
+
+**Uso:**
+
+```bash
+# Processar: os argumentos vão direto para o iped.jar
+docker compose run --rm processar -d /evidences/evidencia.ufdr -o /output/CASO
+
+# Analisar: passe o jar da interface do caso
+docker compose run --rm analisar /output/CASO/iped/lib/iped-search-app.jar
+
+# Shell dentro do container
+docker compose run --rm shell
+```
+
+O diretório atual também é montado no mesmo caminho (como no `dkr`), então caminhos relativos funcionam. Para rodar de outra pasta, use `docker compose -f ~/iped/docker-compose.yml run ...`: o `.env` continua sendo lido da pasta do compose. Os devices `/dev/dri` e `/dev/snd` vêm comentados no `docker-compose.yml`; descomente os que existirem no host.
+
+---
+
 ## 🛠️ Por que este Fork?
 
 O `joaca/iped` foi refinado para:
